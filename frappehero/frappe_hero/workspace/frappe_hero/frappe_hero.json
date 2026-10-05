@@ -1,0 +1,151 @@
+{
+ "charts": [],
+ "content": "[{\"id\": \"fh_header\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h4\\\"><b>Frappe Hero</b></span><div class=\\\"text-muted\\\">Group the people who work here, grant the documents they may use, and see which accounts still have nowhere to go.</div>\", \"col\": 12}}, {\"id\": \"fh_s1\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Permission Studio\", \"col\": 3}}, {\"id\": \"fh_s2\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Account Mapper\", \"col\": 3}}, {\"id\": \"fh_s3\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Unmapped Accounts\", \"col\": 3}}, {\"id\": \"fh_s4\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Next Modules\", \"col\": 3}}, {\"id\": \"fh_c1\", \"type\": \"card\", \"data\": {\"card_name\": \"Permission Studio\", \"col\": 4}}, {\"id\": \"fh_c2\", \"type\": \"card\", \"data\": {\"card_name\": \"Accounts Mapping\", \"col\": 4}}, {\"id\": \"fh_c3\", \"type\": \"card\", \"data\": {\"card_name\": \"Next\", \"col\": 4}}]",
+ "creation": "2026-10-05 00:00:00.000000",
+ "custom_blocks": [],
+ "doctype": "Workspace",
+ "for_user": "",
+ "hide_custom": 0,
+ "icon": "users",
+ "is_hidden": 0,
+ "label": "Frappe Hero",
+ "links": [
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Permission Studio",
+   "link_count": 0,
+   "link_to": "permission-studio",
+   "link_type": "Page",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Permission Studio",
+   "link_count": 0,
+   "link_to": "permission-studio",
+   "link_type": "Page",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Permission Groups",
+   "link_count": 0,
+   "link_to": "Hero Permission Group",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Permission Coverage",
+   "link_count": 0,
+   "link_to": "Permission Coverage",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Accounts Mapping",
+   "link_count": 0,
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Account Mapper",
+   "link_count": 0,
+   "link_to": "account-mapper",
+   "link_type": "Page",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Account Maps",
+   "link_count": 0,
+   "link_to": "Hero Account Map",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Unmapped Accounts",
+   "link_count": 0,
+   "link_to": "Unmapped Accounts",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Next",
+   "link_count": 0,
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Next Modules",
+   "link_count": 0,
+   "link_to": "module-ideas",
+   "link_type": "Page",
+   "onboard": 0,
+   "type": "Link"
+  }
+ ],
+ "modified": "2026-10-05 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Frappe Hero",
+ "name": "Frappe Hero",
+ "number_cards": [],
+ "owner": "Administrator",
+ "parent_page": "",
+ "public": 1,
+ "quick_lists": [],
+ "sequence_id": 50.0,
+ "shortcuts": [
+  {
+   "color": "Blue",
+   "doc_view": "",
+   "label": "Permission Studio",
+   "link_to": "permission-studio",
+   "type": "Page"
+  },
+  {
+   "color": "Green",
+   "doc_view": "",
+   "label": "Account Mapper",
+   "link_to": "account-mapper",
+   "type": "Page"
+  },
+  {
+   "color": "Orange",
+   "doc_view": "",
+   "label": "Unmapped Accounts",
+   "link_to": "Unmapped Accounts",
+   "type": "Report"
+  },
+  {
+   "color": "Purple",
+   "doc_view": "",
+   "label": "Next Modules",
+   "link_to": "module-ideas",
+   "type": "Page"
+  }
+ ],
+ "title": "Frappe Hero"
+}

@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Frappe Hero">
+  <rect width="64" height="64" rx="14" fill="#2490ef"/>
+  <path d="M32 12l16 6v12c0 10.5-6.8 18.4-16 22-9.2-3.6-16-11.5-16-22V18l16-6z" fill="#fff"/>
+  <path d="M32 24a6 6 0 00-6 6v3h-2v9h16v-9h-2v-3a6 6 0 00-6-6zm0 3a3 3 0 013 3v3h-6v-3a3 3 0 013-3z" fill="#2490ef"/>
+</svg>

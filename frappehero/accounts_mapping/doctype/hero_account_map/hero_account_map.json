@@ -1,0 +1,164 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "field:map_name",
+ "creation": "2026-10-05 00:00:00.000000",
+ "description": "Where each ledger account should go: another company, an external code, or a reporting group.",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "map_name",
+  "company",
+  "mapping_type",
+  "enabled",
+  "column_break_main",
+  "target_company",
+  "coverage_percent",
+  "mapped_count",
+  "partial_count",
+  "unmapped_count",
+  "leaf_count",
+  "section_description",
+  "description",
+  "section_lines",
+  "lines"
+ ],
+ "fields": [
+  {
+   "fieldname": "map_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Map Name",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Company",
+   "options": "Company",
+   "reqd": 1
+  },
+  {
+   "fieldname": "mapping_type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Mapping Type",
+   "options": "Another Company\nExternal Code\nReporting Group",
+   "reqd": 1
+  },
+  {
+   "default": "1",
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "in_standard_filter": 1,
+   "label": "Enabled"
+  },
+  {
+   "fieldname": "column_break_main",
+   "fieldtype": "Column Break"
+  },
+  {
+   "depends_on": "eval:doc.mapping_type==\"Another Company\"",
+   "fieldname": "target_company",
+   "fieldtype": "Link",
+   "label": "Target Company",
+   "mandatory_depends_on": "eval:doc.mapping_type==\"Another Company\"",
+   "options": "Company"
+  },
+  {
+   "fieldname": "coverage_percent",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Coverage %",
+   "precision": "1",
+   "read_only": 1
+  },
+  {
+   "fieldname": "mapped_count",
+   "fieldtype": "Int",
+   "label": "Mapped",
+   "read_only": 1
+  },
+  {
+   "fieldname": "partial_count",
+   "fieldtype": "Int",
+   "label": "Partial",
+   "read_only": 1
+  },
+  {
+   "fieldname": "unmapped_count",
+   "fieldtype": "Int",
+   "label": "Unmapped",
+   "read_only": 1
+  },
+  {
+   "fieldname": "leaf_count",
+   "fieldtype": "Int",
+   "label": "Ledger Accounts",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_description",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Small Text",
+   "label": "Description"
+  },
+  {
+   "fieldname": "section_lines",
+   "fieldtype": "Section Break",
+   "label": "Mapped Accounts"
+  },
+  {
+   "description": "Ledger accounts that are not listed here are unmapped. Group accounts are folders and are not mapped.",
+   "fieldname": "lines",
+   "fieldtype": "Table",
+   "label": "Mapped Accounts",
+   "options": "Hero Account Map Line"
+  }
+ ],
+ "links": [],
+ "modified": "2026-10-05 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Accounts Mapping",
+ "name": "Hero Account Map",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Accounts Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "map_name",
+ "track_changes": 1
+}
