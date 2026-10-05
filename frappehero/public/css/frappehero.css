@@ -457,10 +457,46 @@
 	pointer-events: none;
 }
 
+.fh-bad {
+	box-shadow: inset 3px 0 0 #dc2626;
+}
+
+.fh-ok {
+	color: #16a34a;
+}
+
+.fh-cell {
+	min-width: 36px;
+	min-height: 28px;
+	border-radius: 6px;
+	border: 1px solid var(--border-color);
+	background: var(--control-bg, var(--fg-color));
+	color: var(--text-color);
+	cursor: pointer;
+}
+
+.fh-cell.fh-on {
+	background: var(--primary, #2490ef);
+	border-color: transparent;
+	color: #fff;
+}
+
+.fh-wide {
+	width: 100%;
+	min-height: 120px;
+}
+
+.fh-thirds {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 12px;
+}
+
 @media (max-width: 900px) {
 	.fh-stats,
 	.fh-body,
 	.fh-split,
+	.fh-thirds,
 	.fh-tree-layout,
 	.fh-ideas {
 		grid-template-columns: 1fr;

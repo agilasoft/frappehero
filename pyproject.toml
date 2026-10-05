@@ -3,7 +3,7 @@ name = "frappehero"
 authors = [
     { name = "Agilasoft", email = "dev@agilasoft.com"}
 ]
-description = "Group users and the documents they may use, and map every account that still has nowhere to go."
+description = "Group users and the documents they may use, map accounts, and review access, defaults, shares, dimensions, tax, and opening entries."
 requires-python = ">=3.10"
 readme = "README.md"
 dynamic = ["version"]

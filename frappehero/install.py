@@ -14,7 +14,7 @@ def after_migrate():
 
 
 def ensure_custom_fields():
-	"""Mark User Permissions that Permission Studio owns, without forking the DocType."""
+	"""Mark rows Frappe Hero owns, without forking the standard DocTypes."""
 	create_custom_fields(get_custom_fields(), ignore_validate=True, update=True)
 
 
@@ -58,5 +58,24 @@ def get_custom_fields():
 				"no_copy": 1,
 				"description": "Every permission group that grants this same user, DocType, and value.",
 			},
-		]
+		],
+		"DocShare": [
+			{
+				"fieldname": "hero_expires_on",
+				"label": "Expires On",
+				"fieldtype": "Date",
+				"insert_after": "read",
+				"in_standard_filter": 1,
+				"description": "Share Desk deletes this share after the date.",
+			},
+			{
+				"fieldname": "hero_permission_group",
+				"label": "Permission Group",
+				"fieldtype": "Link",
+				"options": "Hero Permission Group",
+				"insert_after": "hero_expires_on",
+				"read_only": 1,
+				"no_copy": 1,
+			},
+		],
 	}

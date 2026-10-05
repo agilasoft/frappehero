@@ -1,7 +1,7 @@
 # Copyright (c) 2026, Agilasoft and contributors
 # For license information, please see license.txt
 
-"""Modules suggested after Permission Studio and Account Mapper.
+"""Desk modules that sit next to Permission Studio and Account Mapper.
 
 The desk page and the README both describe this list. Keep the records
 self-contained so the page can render them without a database.
@@ -10,6 +10,7 @@ self-contained so the page can render them without a database.
 MODULE_IDEAS = [
 	{
 		"name": "Role Composer",
+		"route": "role-composer",
 		"area": "Permissions",
 		"summary": "Compare roles, clone them, and see which DocTypes nobody can read.",
 		"problem": (
@@ -27,6 +28,7 @@ MODULE_IDEAS = [
 	},
 	{
 		"name": "Access Review",
+		"route": "access-review",
 		"area": "Permissions",
 		"summary": "Ask group owners to confirm, on a schedule, that access is still right.",
 		"problem": (
@@ -42,6 +44,7 @@ MODULE_IDEAS = [
 	},
 	{
 		"name": "Default Value Sets",
+		"route": "default-sets",
 		"area": "Permissions",
 		"summary": "Give a whole group the same company, warehouse, cost center, and letter head.",
 		"problem": (
@@ -56,6 +59,7 @@ MODULE_IDEAS = [
 	},
 	{
 		"name": "Share Desk",
+		"route": "share-desk",
 		"area": "Permissions",
 		"summary": "See user permissions, roles, and document shares for one record.",
 		"problem": (
@@ -70,6 +74,7 @@ MODULE_IDEAS = [
 	},
 	{
 		"name": "Dimension Coverage",
+		"route": "dimension-coverage",
 		"area": "Accounts",
 		"summary": "Find accounts and entries missing Cost Center, Project, or Branch.",
 		"problem": (
@@ -84,6 +89,7 @@ MODULE_IDEAS = [
 	},
 	{
 		"name": "Tax Template Mapper",
+		"route": "tax-mapper",
 		"area": "Accounts",
 		"summary": "Match item groups and tax categories to tax templates, and list the gaps.",
 		"problem": (
@@ -98,6 +104,7 @@ MODULE_IDEAS = [
 	},
 	{
 		"name": "Opening and Reclass Desk",
+		"route": "opening-desk",
 		"area": "Accounts",
 		"summary": "Turn a trial balance into an opening entry, and show what is still unmatched.",
 		"problem": (
@@ -112,6 +119,7 @@ MODULE_IDEAS = [
 	},
 	{
 		"name": "Notification Router",
+		"route": "notification-router",
 		"area": "Both",
 		"summary": "Send an alert to a permission group instead of a hard-coded email list.",
 		"problem": (
@@ -139,6 +147,7 @@ def ideas_for(area=None, text=None):
 			haystack = " ".join(
 				[
 					idea["name"],
+					idea.get("route") or "",
 					idea["area"],
 					idea["summary"],
 					idea["problem"],

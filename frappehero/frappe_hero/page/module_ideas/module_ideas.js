@@ -31,7 +31,7 @@ frappehero.ModuleIdeas = class ModuleIdeas {
 		this.page.main.html(`
 			<div class="fh-app">
 				<p class="fh-muted">${__(
-					"Permission Studio and Account Mapper are the first two modules. These are the ones that fit next to them."
+					"Open a module. Search covers the same descriptions as the workspace cards."
 				)}</p>
 				<div class="fh-filters">
 					<input type="search" class="fh-search" placeholder="${__("Search ideas")}">
@@ -46,6 +46,12 @@ frappehero.ModuleIdeas = class ModuleIdeas {
 			</div>
 		`);
 		this.listEl = this.page.main.find(".fh-ideas");
+		this.listEl.on("click", "[data-route]", (event) => {
+			const route = event.currentTarget.getAttribute("data-route");
+			if (route) {
+				frappe.set_route(route);
+			}
+		});
 		this.page.main.find(".fh-search").on("input", (event) => {
 			clearTimeout(this.timer);
 			this.timer = setTimeout(() => {
@@ -79,6 +85,11 @@ frappehero.ModuleIdeas = class ModuleIdeas {
 						<p>${frappehero.esc(idea.problem)}</p>
 						<p>${frappehero.esc(idea.shape)}</p>
 						<p class="fh-muted">${frappehero.esc(idea.builds_on)}</p>
+						${
+							idea.route
+								? `<div class="fh-actions"><button type="button" class="fh-btn" data-route="${frappehero.esc(idea.route)}">${__("Open")}</button></div>`
+								: ""
+						}
 					</article>`
 				)
 				.join("") || `<div class="fh-empty">${__("No ideas match.")}</div>`

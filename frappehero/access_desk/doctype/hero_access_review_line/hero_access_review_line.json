@@ -1,0 +1,99 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "creation": "2026-10-05 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "permission_group",
+  "status",
+  "reviewer",
+  "confirmed_on",
+  "member_count",
+  "rule_count",
+  "member_snapshot",
+  "rule_snapshot",
+  "notes"
+ ],
+ "fields": [
+  {
+   "fieldname": "permission_group",
+   "fieldtype": "Link",
+   "label": "Permission Group",
+   "options": "Hero Permission Group",
+   "reqd": 1,
+   "in_list_view": 1,
+   "columns": 2
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Pending\nConfirmed\nException\nStale",
+   "default": "Pending",
+   "in_list_view": 1,
+   "columns": 2
+  },
+  {
+   "fieldname": "reviewer",
+   "fieldtype": "Link",
+   "label": "Reviewer",
+   "options": "User",
+   "read_only": 1,
+   "in_list_view": 1,
+   "columns": 2
+  },
+  {
+   "fieldname": "confirmed_on",
+   "fieldtype": "Datetime",
+   "label": "Confirmed On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "member_count",
+   "fieldtype": "Int",
+   "label": "Members",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "rule_count",
+   "fieldtype": "Int",
+   "label": "Rules",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "member_snapshot",
+   "fieldtype": "Long Text",
+   "label": "Member Snapshot",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "rule_snapshot",
+   "fieldtype": "Long Text",
+   "label": "Rule Snapshot",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Small Text",
+   "label": "Notes",
+   "in_list_view": 1
+  }
+ ],
+ "links": [],
+ "modified": "2026-10-05 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Access Desk",
+ "name": "Hero Access Review Line",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "istable": 1,
+ "editable_grid": 1
+}

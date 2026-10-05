@@ -13,7 +13,7 @@ bench --site your-site install-app frappehero
 bench --site your-site migrate
 ```
 
-Open the **Frappe Hero** workspace. System Manager can use both modules. Accounts Manager can use Account Mapper and the unmapped report.
+Open the **Frappe Hero** workspace. System Manager can use every module. Accounts Manager can use Account Mapper, the unmapped report, and the finance desk.
 
 ## Permission Studio
 
@@ -63,29 +63,33 @@ Filters: company, map, search, root type, account type, mapped / partial / unmap
 
 Ambiguous matches are skipped rather than guessed. **Unmapped Accounts** is the same list as a report.
 
-## Suggested next modules
+## Access Desk
 
-These are also listed in the desk under **Next Modules**. Each one continues a module that is already here.
+System Manager tools that sit next to Permission Studio. **Next Modules** opens each one.
 
-**Role Composer.** Role Permission Manager edits one DocType at a time. A matrix of roles by DocTypes, with clone and diff, shows where nobody has read. User permissions decide which records open. Roles decide which actions exist.
+**Role Composer** is a grid of roles by DocType for one permission bit at a time (read, write, submit, and the rest). Filter by module, search, or "nobody can read". Click a cell to turn that bit on or off. Changes go through Custom DocPerm, so standard DocPerm rows shipped with an app stay untouched. Clone copies a role into a new one. Diff lists the bits where two roles disagree.
 
-**Access Review.** A scheduled sign-off per permission group: confirm the members, confirm the values, and list manual User Permissions that no group explains.
+**Access Review** starts a sign-off for every enabled permission group. Confirm the members and values, or mark an exception. If the group changes after that, the line becomes Stale until someone confirms it again. The same page lists User Permissions that no group explains.
 
-**Default Value Sets.** Reuse a permission group as the audience for company, warehouse, cost center, and letter head defaults, and show users whose defaults disagree.
+**Default Value Sets** reuse a permission group as the audience for company, warehouse, cost center, letter head, and any other DocType default. A blank current default is ready to fill. A different value is a conflict. Apply writes `frappe.defaults` for each member.
 
-**Share Desk.** For one document, show role access, user permissions, and shares together. Share it with a permission group and give the share an end date.
+**Share Desk** picks one document and shows roles with read, User Permissions that name it, and DocShares. Share it with a permission group. An end date is stored on the share; the daily job deletes shares after that date.
 
-**Dimension Coverage.** Find accounts and GL entries missing Cost Center, Project, or Branch, and map a default dimension the way Account Mapper maps a target.
+**Notification Router** emails a permission group for unmapped accounts, users who are in no group, or open access reviews. The daily job and Send Now both skip a route that already went out today.
 
-**Tax Template Mapper.** A matrix of item tax template by item group and tax category, with the unmapped combinations called out.
+## Finance Desk
 
-**Opening and Reclass Desk.** Match an imported trial balance to accounts with the same suggestions Account Mapper uses, and post the opening journal only when the difference is zero.
+System Manager and Accounts Manager.
 
-**Notification Router.** Send alerts for unmapped accounts, or for users in no group, to a permission group instead of a fixed email list.
+**Dimension Coverage** picks a company and Cost Center, Project, or Branch. Each ledger shows whether its GL entries are complete, partial, missing, or empty. Set a default per account. Opt in if new GL entries should receive that value when the dimension is still empty. A value already on the entry is left alone. Branch is hidden when the GL Entry has no Branch field.
+
+**Tax Template Mapper** walks item groups for one company. A group is mapped when it, or an ancestor, has an item tax template for that company. Items with no template of their own appear only when their group is unmapped. Assign a template to the groups you tick, or clear the templates for that company.
+
+**Opening and Reclass Desk** pastes a trial balance. Lines match with the same rules as Account Mapper: one account number, otherwise one account name. An ambiguous number stays unmatched. The desk creates a draft Journal Entry when every line is matched and debit minus credit is about zero.
 
 ## Tests
 
-The rules for grants, conflicts, the account tree, and suggestions run without a site:
+The rules for grants, conflicts, the account tree, role diffs, reviews, dimensions, tax inheritance, and opening journals run without a site:
 
 ```bash
 python -m unittest discover -s frappehero -p "test_*.py"
