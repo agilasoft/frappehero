@@ -1,0 +1,18 @@
+{
+ "creation": "2026-10-05 00:00:00.000000",
+ "doctype": "Page",
+ "modified": "2026-10-05 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Access Desk",
+ "name": "default-sets",
+ "owner": "Administrator",
+ "page_name": "default-sets",
+ "roles": [
+  {
+   "role": "System Manager"
+  }
+ ],
+ "standard": "Yes",
+ "system_page": 0,
+ "title": "Default Value Sets"
+}

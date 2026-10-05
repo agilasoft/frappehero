@@ -1,0 +1,82 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "creation": "2026-10-05 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "account_number",
+  "account_name",
+  "debit",
+  "credit",
+  "matched_account",
+  "match_status",
+  "match_reason"
+ ],
+ "fields": [
+  {
+   "fieldname": "account_number",
+   "fieldtype": "Data",
+   "label": "Account Number",
+   "in_list_view": 1,
+   "columns": 2
+  },
+  {
+   "fieldname": "account_name",
+   "fieldtype": "Data",
+   "label": "Account Name",
+   "in_list_view": 1,
+   "columns": 2
+  },
+  {
+   "fieldname": "debit",
+   "fieldtype": "Float",
+   "label": "Debit",
+   "in_list_view": 1,
+   "columns": 1
+  },
+  {
+   "fieldname": "credit",
+   "fieldtype": "Float",
+   "label": "Credit",
+   "in_list_view": 1,
+   "columns": 1
+  },
+  {
+   "fieldname": "matched_account",
+   "fieldtype": "Link",
+   "label": "Matched Account",
+   "options": "Account",
+   "in_list_view": 1,
+   "ignore_user_permissions": 1,
+   "columns": 2
+  },
+  {
+   "fieldname": "match_status",
+   "fieldtype": "Select",
+   "label": "Match",
+   "options": "Unmatched\nMatched\nAmbiguous",
+   "default": "Unmatched",
+   "in_list_view": 1,
+   "columns": 1
+  },
+  {
+   "fieldname": "match_reason",
+   "fieldtype": "Small Text",
+   "label": "Reason",
+   "read_only": 1
+  }
+ ],
+ "links": [],
+ "modified": "2026-10-05 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Finance Desk",
+ "name": "Hero Opening Line",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "istable": 1,
+ "editable_grid": 1
+}

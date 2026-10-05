@@ -1,0 +1,105 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "creation": "2026-10-05 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "route_name",
+  "event",
+  "permission_group",
+  "account_map",
+  "enabled",
+  "column_break_main",
+  "last_sent",
+  "last_summary"
+ ],
+ "fields": [
+  {
+   "fieldname": "route_name",
+   "fieldtype": "Data",
+   "label": "Route Name",
+   "reqd": 1,
+   "unique": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "event",
+   "fieldtype": "Select",
+   "label": "Event",
+   "options": "Unmapped Accounts\nUsers Without a Group\nOpen Access Reviews",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "permission_group",
+   "fieldtype": "Link",
+   "label": "Permission Group",
+   "options": "Hero Permission Group",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "account_map",
+   "fieldtype": "Link",
+   "label": "Account Map",
+   "options": "Hero Account Map",
+   "depends_on": "eval:doc.event=='Unmapped Accounts'",
+   "mandatory_depends_on": "eval:doc.event=='Unmapped Accounts'"
+  },
+  {
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "label": "Enabled",
+   "default": "1",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "column_break_main",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "last_sent",
+   "fieldtype": "Date",
+   "label": "Last Sent",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "last_summary",
+   "fieldtype": "Small Text",
+   "label": "Last Summary",
+   "read_only": 1,
+   "no_copy": 1
+  }
+ ],
+ "links": [],
+ "modified": "2026-10-05 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Access Desk",
+ "name": "Hero Notification Route",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "autoname": "field:route_name",
+ "naming_rule": "By fieldname",
+ "title_field": "route_name",
+ "track_changes": 1,
+ "description": "Email a permission group when accounts, access, or reviews need attention."
+}

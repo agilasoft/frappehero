@@ -15,7 +15,10 @@ class TestAppStructure(unittest.TestCase):
 			for line in (PACKAGE / "modules.txt").read_text().splitlines()
 			if line.strip() and not line.startswith("#")
 		}
-		self.assertEqual(modules, {"Frappe Hero", "Permission Studio", "Accounts Mapping"})
+		self.assertEqual(
+			modules,
+			{"Frappe Hero", "Permission Studio", "Accounts Mapping", "Access Desk", "Finance Desk"},
+		)
 		for path in PACKAGE.rglob("*.json"):
 			payload = json.loads(path.read_text())
 			kind = payload.get("doctype")

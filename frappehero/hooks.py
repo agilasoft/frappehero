@@ -1,7 +1,7 @@
 app_name = "frappehero"
 app_title = "Frappe Hero"
 app_publisher = "Agilasoft"
-app_description = "Group users and the documents they may use, and map every account that still has nowhere to go."
+app_description = "Group users and the documents they may use, map accounts, and review access, defaults, shares, dimensions, tax, and opening entries."
 app_email = "dev@agilasoft.com"
 app_license = "mit"
 
@@ -30,7 +30,14 @@ after_migrate = "frappehero.install.after_migrate"
 doc_events = {
 	"User Permission": {
 		"validate": "frappehero.permissions.lock_hero_fields",
-	}
+	},
+	"GL Entry": {
+		"validate": "frappehero.finance_desk.gl.apply_dimension_defaults",
+	},
+}
+
+scheduler_events = {
+	"daily": ["frappehero.access_desk.tasks.daily"],
 }
 
 # Permission Studio writes User Permissions. The ownership fields are read-only

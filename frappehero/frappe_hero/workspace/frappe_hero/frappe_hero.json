@@ -1,6 +1,6 @@
 {
  "charts": [],
- "content": "[{\"id\": \"fh_header\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h4\\\"><b>Frappe Hero</b></span><div class=\\\"text-muted\\\">Group the people who work here, grant the documents they may use, and see which accounts still have nowhere to go.</div>\", \"col\": 12}}, {\"id\": \"fh_s1\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Permission Studio\", \"col\": 3}}, {\"id\": \"fh_s2\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Account Mapper\", \"col\": 3}}, {\"id\": \"fh_s3\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Unmapped Accounts\", \"col\": 3}}, {\"id\": \"fh_s4\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Next Modules\", \"col\": 3}}, {\"id\": \"fh_c1\", \"type\": \"card\", \"data\": {\"card_name\": \"Permission Studio\", \"col\": 4}}, {\"id\": \"fh_c2\", \"type\": \"card\", \"data\": {\"card_name\": \"Accounts Mapping\", \"col\": 4}}, {\"id\": \"fh_c3\", \"type\": \"card\", \"data\": {\"card_name\": \"Next\", \"col\": 4}}]",
+ "content": "[{\"id\": \"fh_header\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h4\\\"><b>Frappe Hero</b></span><div class=\\\"text-muted\\\">Group people and the records they may use, map accounts, and review roles, access, defaults, shares, dimensions, tax, and opening balances.</div>\", \"col\": 12}}, {\"id\": \"fh_s1\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Permission Studio\", \"col\": 3}}, {\"id\": \"fh_s2\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Account Mapper\", \"col\": 3}}, {\"id\": \"fh_s3\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Unmapped Accounts\", \"col\": 3}}, {\"id\": \"fh_s4\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Next Modules\", \"col\": 3}}, {\"id\": \"fh_s5\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Role Composer\", \"col\": 3}}, {\"id\": \"fh_s6\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Access Review\", \"col\": 3}}, {\"id\": \"fh_s7\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Dimension Coverage\", \"col\": 3}}, {\"id\": \"fh_s8\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Opening Desk\", \"col\": 3}}, {\"id\": \"fh_c1\", \"type\": \"card\", \"data\": {\"card_name\": \"Permission Studio\", \"col\": 4}}, {\"id\": \"fh_c2\", \"type\": \"card\", \"data\": {\"card_name\": \"Accounts Mapping\", \"col\": 4}}, {\"id\": \"fh_c3\", \"type\": \"card\", \"data\": {\"card_name\": \"Access Desk\", \"col\": 4}}, {\"id\": \"fh_c4\", \"type\": \"card\", \"data\": {\"card_name\": \"Finance Desk\", \"col\": 4}}, {\"id\": \"fh_c5\", \"type\": \"card\", \"data\": {\"card_name\": \"Next\", \"col\": 4}}]",
  "creation": "2026-10-05 00:00:00.000000",
  "custom_blocks": [],
  "doctype": "Workspace",
@@ -91,6 +91,132 @@
   {
    "hidden": 0,
    "is_query_report": 0,
+   "label": "Access Desk",
+   "link_count": 0,
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Role Composer",
+   "link_count": 0,
+   "link_to": "role-composer",
+   "link_type": "Page",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Access Review",
+   "link_count": 0,
+   "link_to": "access-review",
+   "link_type": "Page",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Default Value Sets",
+   "link_count": 0,
+   "link_to": "default-sets",
+   "link_type": "Page",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Share Desk",
+   "link_count": 0,
+   "link_to": "share-desk",
+   "link_type": "Page",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Notification Router",
+   "link_count": 0,
+   "link_to": "notification-router",
+   "link_type": "Page",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Access Reviews",
+   "link_count": 0,
+   "link_to": "Hero Access Review",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Finance Desk",
+   "link_count": 0,
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Dimension Coverage",
+   "link_count": 0,
+   "link_to": "dimension-coverage",
+   "link_type": "Page",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Tax Template Mapper",
+   "link_count": 0,
+   "link_to": "tax-mapper",
+   "link_type": "Page",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Opening Desk",
+   "link_count": 0,
+   "link_to": "opening-desk",
+   "link_type": "Page",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Dimension Defaults",
+   "link_count": 0,
+   "link_to": "Hero Dimension Default",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Opening Batches",
+   "link_count": 0,
+   "link_to": "Hero Opening Batch",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
    "label": "Next",
    "link_count": 0,
    "onboard": 0,
@@ -144,6 +270,34 @@
    "doc_view": "",
    "label": "Next Modules",
    "link_to": "module-ideas",
+   "type": "Page"
+  },
+  {
+   "color": "Blue",
+   "doc_view": "",
+   "label": "Role Composer",
+   "link_to": "role-composer",
+   "type": "Page"
+  },
+  {
+   "color": "Yellow",
+   "doc_view": "",
+   "label": "Access Review",
+   "link_to": "access-review",
+   "type": "Page"
+  },
+  {
+   "color": "Green",
+   "doc_view": "",
+   "label": "Dimension Coverage",
+   "link_to": "dimension-coverage",
+   "type": "Page"
+  },
+  {
+   "color": "Orange",
+   "doc_view": "",
+   "label": "Opening Desk",
+   "link_to": "opening-desk",
    "type": "Page"
   }
  ],
