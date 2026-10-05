@@ -1,0 +1,22 @@
+{
+  "env": {
+    "browser": true,
+    "node": true,
+    "es6": true
+  },
+  "parserOptions": {
+    "ecmaVersion": 2022
+  },
+  "extends": "eslint:recommended",
+  "globals": {
+    "frappe": "readonly",
+    "__": "readonly",
+    "cint": "readonly",
+    "flt": "readonly",
+    "$": "readonly"
+  },
+  "rules": {
+    "no-unused-vars": "off",
+    "no-empty": "off"
+  }
+}
