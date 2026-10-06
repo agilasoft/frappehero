@@ -7,8 +7,9 @@ Opening a dispute releases every active action on that sales invoice.
 Hold, Collection, and Dunning are the usual kinds. Any other kind is
 released as well. Closing the dispute does not put those actions back.
 
-Statement of Account and Receivables Aging still list the invoice, under
-Disputed Transactions, and leave it out of the amount due and the buckets.
+Statement of Account and Receivables Aging leave an open dispute out of the
+amount due and the aging buckets. The table is only the invoices still due.
+Disputed Transactions is a section on the printout.
 """
 
 from datetime import date, datetime
@@ -201,8 +202,8 @@ def invoice_link_for(disputes, sales_invoice) -> dict:
 def statement_of_account(rows, disputes, customer=None, company=None, from_date=None, to_date=None) -> dict:
 	"""Outstanding invoices for one statement.
 
-	Open disputed invoices follow a Disputed Transactions section and are
-	excluded from the running balance.
+	``rows`` is the table: invoices still in the amount due. ``disputed_rows``
+	is the Disputed Transactions section on the printout, with no running balance.
 	"""
 	start = _as_date(from_date)
 	end = _as_date(to_date)
@@ -212,22 +213,24 @@ def statement_of_account(rows, disputes, customer=None, company=None, from_date=
 	for row in _sorted_rows(normal):
 		balance = round(balance + row["outstanding"], 2)
 		statement.append({**row, "running_balance": balance, "section": "", "is_section": 0, "bold": 0})
-	disputed_total = round(sum(row["outstanding"] for row in disputed), 2)
-	if disputed:
-		statement.append(_section_row(customer))
-		for row in _sorted_rows(disputed):
-			statement.append(
-				{**row, "running_balance": None, "section": DISPUTED_SECTION, "is_section": 0, "bold": 0}
-			)
+	disputed_rows = [
+		{**row, "running_balance": None, "section": DISPUTED_SECTION, "is_section": 0, "bold": 0}
+		for row in _sorted_rows(disputed)
+	]
 	return {
 		"rows": statement,
+		"disputed_rows": disputed_rows,
 		"amount_due": balance,
-		"disputed_outstanding": disputed_total,
+		"disputed_outstanding": round(sum(row["outstanding"] for row in disputed), 2),
 	}
 
 
 def receivables_aging(rows, disputes, as_of, customer=None, company=None) -> dict:
-	"""Age outstanding invoices. Open disputes sit under Disputed Transactions."""
+	"""Age outstanding invoices.
+
+	Open disputes stay out of the buckets. They are ``disputed_rows``, printed
+	under Disputed Transactions, not lines on the aging table.
+	"""
 	end = _as_date(as_of)
 	if not end:
 		raise DisputeError("As-of date is required.")
@@ -240,28 +243,96 @@ def receivables_aging(rows, disputes, as_of, customer=None, company=None) -> dic
 		amounts = _bucket_amounts(bucket, row["outstanding"])
 		buckets[bucket] = round(buckets[bucket] + row["outstanding"], 2)
 		aged.append({**row, "age_days": days, "section": "", "is_section": 0, "bold": 0, **amounts})
-	disputed_total = round(sum(row["outstanding"] for row in disputed), 2)
-	if disputed:
-		aged.append(_section_row(customer))
-		for row in _sorted_rows(disputed):
-			days = _age_days(row, end)
-			amounts = _bucket_amounts(None, 0)
-			aged.append(
-				{
-					**row,
-					"age_days": days,
-					"section": DISPUTED_SECTION,
-					"is_section": 0,
-					"bold": 0,
-					**amounts,
-				}
-			)
+	disputed_rows = []
+	for row in _sorted_rows(disputed):
+		days = _age_days(row, end)
+		disputed_rows.append(
+			{
+				**row,
+				"age_days": days,
+				"section": DISPUTED_SECTION,
+				"is_section": 0,
+				"bold": 0,
+				**_bucket_amounts(None, 0),
+			}
+		)
 	return {
 		"rows": aged,
+		"disputed_rows": disputed_rows,
 		"buckets": buckets,
 		"amount_due": round(sum(buckets.values()), 2),
-		"disputed_outstanding": disputed_total,
+		"disputed_outstanding": round(sum(row["outstanding"] for row in disputed), 2),
 	}
+
+
+def rows_for_desk(result) -> list:
+	"""Table lines first, then the printout's Disputed Transactions lines."""
+	rows = list(result.get("rows") or [])
+	rows.extend(result.get("disputed_rows") or [])
+	return rows
+
+
+def filter_disputes(
+	rows,
+	company=None,
+	customer=None,
+	status=None,
+	sales_invoice=None,
+	text=None,
+	from_date=None,
+	to_date=None,
+) -> list:
+	"""Keep disputes that match the Dispute Desk filters.
+
+	A blank status, or All, does not filter by status. ``text`` matches the
+	invoice, customer, source, reason, and status.
+	"""
+	wanted_company = clean_text(company)
+	wanted_customer = clean_text(customer)
+	wanted_invoice = clean_text(sales_invoice)
+	wanted_status = clean_text(status)
+	if wanted_status.casefold() == "all":
+		wanted_status = ""
+	start = _as_date(from_date) if clean_text(from_date) else None
+	end = _as_date(to_date) if clean_text(to_date) else None
+	query = " ".join(clean_text(text).casefold().split())
+	matched = []
+	for row in rows or []:
+		if wanted_company and clean_text(row.get("company")) != wanted_company:
+			continue
+		if wanted_customer and clean_text(row.get("customer")) != wanted_customer:
+			continue
+		if wanted_invoice and clean_text(row.get("sales_invoice")) != wanted_invoice:
+			continue
+		if wanted_status and clean_text(row.get("status")) != wanted_status:
+			continue
+		if start or end:
+			disputed_on = _as_date(row.get("dispute_date"))
+			if not disputed_on:
+				continue
+			if start and disputed_on < start:
+				continue
+			if end and disputed_on > end:
+				continue
+		if query:
+			haystack = " ".join(
+				clean_text(row.get(key))
+				for key in (
+					"name",
+					"company",
+					"customer",
+					"sales_invoice",
+					"status",
+					"reason",
+					"reference_doctype",
+					"reference_name",
+					"source_module",
+				)
+			).casefold()
+			if query not in haystack:
+				continue
+		matched.append(row)
+	return matched
 
 
 def same_day(left, right) -> bool:
@@ -334,23 +405,6 @@ def _action_row(action) -> dict:
 		"invoice_action": invoice_action,
 		"customer": clean_text(action.get("customer")),
 		"company": clean_text(action.get("company")),
-	}
-
-
-def _section_row(customer) -> dict:
-	return {
-		"sales_invoice": "",
-		"customer": clean_text(customer),
-		"company": "",
-		"posting_date": None,
-		"due_date": None,
-		"outstanding": None,
-		"running_balance": None,
-		"age_days": None,
-		"section": DISPUTED_SECTION,
-		"is_section": 1,
-		"bold": 1,
-		**_bucket_amounts(None, 0),
 	}
 
 

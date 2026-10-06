@@ -25,4 +25,21 @@ frappe.query_reports["Receivables Aging"] = {
 			default: frappe.datetime.get_today(),
 		},
 	],
+	onload(report) {
+		frappehero_split_disputed_print(report);
+	},
 };
+
+function frappehero_split_disputed_print(report) {
+	if (report._disputed_print) {
+		return;
+	}
+	report._disputed_print = true;
+	const prepare = report.prepare_report_data.bind(report);
+	report.prepare_report_data = function (payload) {
+		prepare(payload);
+		const all = this.data || [];
+		this.disputed_rows = all.filter((row) => row.section === "Disputed Transactions");
+		this.data = all.filter((row) => row.section !== "Disputed Transactions" && !row.is_section);
+	};
+}

@@ -6,7 +6,7 @@ from frappe import _
 from frappe.utils import today
 
 from frappehero.dispute_desk.api import aging_rows
-from frappehero.dispute_desk.logic import DisputeError
+from frappehero.dispute_desk.logic import DisputeError, rows_for_desk
 from frappehero.flags import clean_text
 
 
@@ -22,7 +22,9 @@ def execute(filters=None):
 		result = aging_rows(company, clean_text(filters.get("customer")) or None, as_of)
 	except DisputeError as exc:
 		frappe.throw(_(str(exc)))
-	return columns, result["rows"]
+	# Disputed lines travel with the result so the printout can section them.
+	# The report script takes them off the table.
+	return columns, rows_for_desk(result), None, None, _summary(result)
 
 
 def _columns():
@@ -37,5 +39,14 @@ def _columns():
 		{"label": _("31-60"), "fieldname": "days_31_60", "fieldtype": "Float", "width": 110},
 		{"label": _("61-90"), "fieldname": "days_61_90", "fieldtype": "Float", "width": 110},
 		{"label": _("91 and over"), "fieldname": "days_91_over", "fieldtype": "Float", "width": 120},
-		{"label": _("Section"), "fieldname": "section", "fieldtype": "Data", "width": 180},
 	]
+
+
+def _summary(result):
+	summary = [
+		{"value": result["amount_due"], "label": _("Amount Due"), "datatype": "Float"},
+		{"value": result["disputed_outstanding"], "label": _("Disputed"), "datatype": "Float"},
+	]
+	for label, amount in result["buckets"].items():
+		summary.append({"value": amount, "label": _(label), "datatype": "Float"})
+	return summary

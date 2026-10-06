@@ -4,7 +4,7 @@
 import frappe
 from frappe.utils import today
 
-from frappehero.dispute_desk.logic import receivables_aging, statement_of_account
+from frappehero.dispute_desk.logic import filter_disputes, receivables_aging, statement_of_account
 from frappehero.flags import clean_text
 
 
@@ -70,15 +70,52 @@ def register_invoice_action(
 
 
 @frappe.whitelist()
-def list_disputes(company: str | None = None, status: str | None = None) -> list:
+def list_disputes(
+	company: str | None = None,
+	customer: str | None = None,
+	status: str | None = None,
+	sales_invoice: str | None = None,
+	text: str | None = None,
+	from_date: str | None = None,
+	to_date: str | None = None,
+) -> list:
+	"""Disputes for Dispute Desk, narrowed by the filters on the page."""
 	_accounts()
+	filters = _dispute_filters(company, customer, status, sales_invoice, from_date, to_date)
+	names = frappe.get_all("Hero Dispute", filters=filters, pluck="name", order_by="modified desc")
+	rows = [_dispute_summary(frappe.get_doc("Hero Dispute", name), include_releases=False) for name in names]
+	return filter_disputes(
+		rows,
+		company=company,
+		customer=customer,
+		status=status,
+		sales_invoice=sales_invoice,
+		text=text,
+		from_date=from_date,
+		to_date=to_date,
+	)
+
+
+def _dispute_filters(company, customer, status, sales_invoice, from_date, to_date) -> dict:
 	filters = {}
 	if clean_text(company):
 		filters["company"] = clean_text(company)
-	if clean_text(status):
-		filters["status"] = clean_text(status)
-	names = frappe.get_all("Hero Dispute", filters=filters, pluck="name", order_by="modified desc")
-	return [_dispute_summary(frappe.get_doc("Hero Dispute", name), include_releases=False) for name in names]
+	if clean_text(customer):
+		filters["customer"] = clean_text(customer)
+	status_text = clean_text(status)
+	if status_text and status_text.casefold() != "all":
+		filters["status"] = status_text
+	if clean_text(sales_invoice):
+		filters["sales_invoice"] = clean_text(sales_invoice)
+	start = clean_text(from_date)
+	end = clean_text(to_date)
+	if start and end:
+		filters["dispute_date"] = ["between", [start, end]]
+	elif start:
+		filters["dispute_date"] = [">=", start]
+	elif end:
+		filters["dispute_date"] = ["<=", end]
+	return filters
 
 
 @frappe.whitelist()
