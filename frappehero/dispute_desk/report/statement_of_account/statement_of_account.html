@@ -1,20 +1,20 @@
-<h2 style="margin: 0 0 8px;">{{ title }}</h2>
+<h2>{{ title }}</h2>
 {% if (subtitle) { %}
-<div style="margin-bottom: 12px;">{{ subtitle }}</div>
+<p>{{ subtitle }}</p>
 {% } %}
-<p style="margin: 0 0 8px; font-size: 12px; color: #555;">
+<p>
 	{%= __("Amount due") %}:
 	{%= frappe.format((data || []).reduce(function (sum, row) { return sum + (+row.outstanding || 0); }, 0), {"fieldtype": "Float", "precision": 2}) %}
 </p>
-<table class="table table-bordered" style="width: 100%; border-collapse: collapse;">
+<table class="table table-bordered">
 	<thead>
 		<tr>
-			<th style="text-align: left;">{%= __("Posting Date") %}</th>
-			<th style="text-align: left;">{%= __("Sales Invoice") %}</th>
-			<th style="text-align: left;">{%= __("Customer") %}</th>
-			<th style="text-align: left;">{%= __("Due Date") %}</th>
-			<th style="text-align: right;">{%= __("Outstanding") %}</th>
-			<th style="text-align: right;">{%= __("Running Balance") %}</th>
+			<th>{%= __("Posting Date") %}</th>
+			<th>{%= __("Sales Invoice") %}</th>
+			<th>{%= __("Customer") %}</th>
+			<th>{%= __("Due Date") %}</th>
+			<th class="text-right">{%= __("Outstanding") %}</th>
+			<th class="text-right">{%= __("Running Balance") %}</th>
 		</tr>
 	</thead>
 	<tbody>
@@ -24,26 +24,26 @@
 			<td>{%= row.sales_invoice || "" %}</td>
 			<td>{%= row.customer || "" %}</td>
 			<td>{%= row.due_date ? frappe.datetime.str_to_user(row.due_date) : "" %}</td>
-			<td style="text-align: right;">{%= frappe.format(row.outstanding, {"fieldtype": "Float", "precision": 2}) %}</td>
-			<td style="text-align: right;">{%= row.running_balance == null ? "" : frappe.format(row.running_balance, {"fieldtype": "Float", "precision": 2}) %}</td>
+			<td class="text-right">{%= frappe.format(row.outstanding, {"fieldtype": "Float", "precision": 2}) %}</td>
+			<td class="text-right">{%= row.running_balance == null ? "" : frappe.format(row.running_balance, {"fieldtype": "Float", "precision": 2}) %}</td>
 		</tr>
 		{% endfor %}
 	</tbody>
 </table>
 {% if (report.disputed_rows && report.disputed_rows.length) { %}
-<h3 style="margin: 18px 0 6px;">{%= __("Disputed Transactions") %}</h3>
-<p style="margin: 0 0 8px; font-size: 12px; color: #555;">
+<h3>{%= __("Disputed Transactions") %}</h3>
+<p>
 	{%= __("Open disputes. Left out of the amount due.") %}
 	{%= frappe.format(report.disputed_rows.reduce(function (sum, row) { return sum + (+row.outstanding || 0); }, 0), {"fieldtype": "Float", "precision": 2}) %}
 </p>
-<table class="table table-bordered" style="width: 100%; border-collapse: collapse;">
+<table class="table table-bordered">
 	<thead>
 		<tr>
-			<th style="text-align: left;">{%= __("Posting Date") %}</th>
-			<th style="text-align: left;">{%= __("Sales Invoice") %}</th>
-			<th style="text-align: left;">{%= __("Customer") %}</th>
-			<th style="text-align: left;">{%= __("Due Date") %}</th>
-			<th style="text-align: right;">{%= __("Outstanding") %}</th>
+			<th>{%= __("Posting Date") %}</th>
+			<th>{%= __("Sales Invoice") %}</th>
+			<th>{%= __("Customer") %}</th>
+			<th>{%= __("Due Date") %}</th>
+			<th class="text-right">{%= __("Outstanding") %}</th>
 		</tr>
 	</thead>
 	<tbody>
@@ -53,7 +53,7 @@
 			<td>{%= row.sales_invoice || "" %}</td>
 			<td>{%= row.customer || "" %}</td>
 			<td>{%= row.due_date ? frappe.datetime.str_to_user(row.due_date) : "" %}</td>
-			<td style="text-align: right;">{%= frappe.format(row.outstanding, {"fieldtype": "Float", "precision": 2}) %}</td>
+			<td class="text-right">{%= frappe.format(row.outstanding, {"fieldtype": "Float", "precision": 2}) %}</td>
 		</tr>
 		{% endfor %}
 	</tbody>

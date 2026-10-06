@@ -1,24 +1,24 @@
-<h2 style="margin: 0 0 8px;">{{ title }}</h2>
+<h2>{{ title }}</h2>
 {% if (subtitle) { %}
-<div style="margin-bottom: 12px;">{{ subtitle }}</div>
+<p>{{ subtitle }}</p>
 {% } %}
-<p style="margin: 0 0 8px; font-size: 12px; color: #555;">
+<p>
 	{%= __("Amount due") %}:
 	{%= frappe.format((data || []).reduce(function (sum, row) { return sum + (+row.outstanding || 0); }, 0), {"fieldtype": "Float", "precision": 2}) %}
 </p>
-<table class="table table-bordered" style="width: 100%; border-collapse: collapse;">
+<table class="table table-bordered">
 	<thead>
 		<tr>
-			<th style="text-align: left;">{%= __("Customer") %}</th>
-			<th style="text-align: left;">{%= __("Sales Invoice") %}</th>
-			<th style="text-align: left;">{%= __("Due Date") %}</th>
-			<th style="text-align: right;">{%= __("Outstanding") %}</th>
-			<th style="text-align: right;">{%= __("Age") %}</th>
-			<th style="text-align: right;">{%= __("Current") %}</th>
-			<th style="text-align: right;">{%= __("1-30") %}</th>
-			<th style="text-align: right;">{%= __("31-60") %}</th>
-			<th style="text-align: right;">{%= __("61-90") %}</th>
-			<th style="text-align: right;">{%= __("91 and over") %}</th>
+			<th>{%= __("Customer") %}</th>
+			<th>{%= __("Sales Invoice") %}</th>
+			<th>{%= __("Due Date") %}</th>
+			<th class="text-right">{%= __("Outstanding") %}</th>
+			<th class="text-right">{%= __("Age") %}</th>
+			<th class="text-right">{%= __("Current") %}</th>
+			<th class="text-right">{%= __("1-30") %}</th>
+			<th class="text-right">{%= __("31-60") %}</th>
+			<th class="text-right">{%= __("61-90") %}</th>
+			<th class="text-right">{%= __("91 and over") %}</th>
 		</tr>
 	</thead>
 	<tbody>
@@ -27,31 +27,31 @@
 			<td>{%= row.customer || "" %}</td>
 			<td>{%= row.sales_invoice || "" %}</td>
 			<td>{%= row.due_date ? frappe.datetime.str_to_user(row.due_date) : "" %}</td>
-			<td style="text-align: right;">{%= frappe.format(row.outstanding, {"fieldtype": "Float", "precision": 2}) %}</td>
-			<td style="text-align: right;">{%= row.age_days == null ? "" : row.age_days %}</td>
-			<td style="text-align: right;">{%= frappe.format(row.current, {"fieldtype": "Float", "precision": 2}) %}</td>
-			<td style="text-align: right;">{%= frappe.format(row.days_1_30, {"fieldtype": "Float", "precision": 2}) %}</td>
-			<td style="text-align: right;">{%= frappe.format(row.days_31_60, {"fieldtype": "Float", "precision": 2}) %}</td>
-			<td style="text-align: right;">{%= frappe.format(row.days_61_90, {"fieldtype": "Float", "precision": 2}) %}</td>
-			<td style="text-align: right;">{%= frappe.format(row.days_91_over, {"fieldtype": "Float", "precision": 2}) %}</td>
+			<td class="text-right">{%= frappe.format(row.outstanding, {"fieldtype": "Float", "precision": 2}) %}</td>
+			<td class="text-right">{%= row.age_days == null ? "" : row.age_days %}</td>
+			<td class="text-right">{%= frappe.format(row.current, {"fieldtype": "Float", "precision": 2}) %}</td>
+			<td class="text-right">{%= frappe.format(row.days_1_30, {"fieldtype": "Float", "precision": 2}) %}</td>
+			<td class="text-right">{%= frappe.format(row.days_31_60, {"fieldtype": "Float", "precision": 2}) %}</td>
+			<td class="text-right">{%= frappe.format(row.days_61_90, {"fieldtype": "Float", "precision": 2}) %}</td>
+			<td class="text-right">{%= frappe.format(row.days_91_over, {"fieldtype": "Float", "precision": 2}) %}</td>
 		</tr>
 		{% endfor %}
 	</tbody>
 </table>
 {% if (report.disputed_rows && report.disputed_rows.length) { %}
-<h3 style="margin: 18px 0 6px;">{%= __("Disputed Transactions") %}</h3>
-<p style="margin: 0 0 8px; font-size: 12px; color: #555;">
+<h3>{%= __("Disputed Transactions") %}</h3>
+<p>
 	{%= __("Open disputes. Left out of the aging buckets.") %}
 	{%= frappe.format(report.disputed_rows.reduce(function (sum, row) { return sum + (+row.outstanding || 0); }, 0), {"fieldtype": "Float", "precision": 2}) %}
 </p>
-<table class="table table-bordered" style="width: 100%; border-collapse: collapse;">
+<table class="table table-bordered">
 	<thead>
 		<tr>
-			<th style="text-align: left;">{%= __("Customer") %}</th>
-			<th style="text-align: left;">{%= __("Sales Invoice") %}</th>
-			<th style="text-align: left;">{%= __("Due Date") %}</th>
-			<th style="text-align: right;">{%= __("Outstanding") %}</th>
-			<th style="text-align: right;">{%= __("Age") %}</th>
+			<th>{%= __("Customer") %}</th>
+			<th>{%= __("Sales Invoice") %}</th>
+			<th>{%= __("Due Date") %}</th>
+			<th class="text-right">{%= __("Outstanding") %}</th>
+			<th class="text-right">{%= __("Age") %}</th>
 		</tr>
 	</thead>
 	<tbody>
@@ -60,8 +60,8 @@
 			<td>{%= row.customer || "" %}</td>
 			<td>{%= row.sales_invoice || "" %}</td>
 			<td>{%= row.due_date ? frappe.datetime.str_to_user(row.due_date) : "" %}</td>
-			<td style="text-align: right;">{%= frappe.format(row.outstanding, {"fieldtype": "Float", "precision": 2}) %}</td>
-			<td style="text-align: right;">{%= row.age_days == null ? "" : row.age_days %}</td>
+			<td class="text-right">{%= frappe.format(row.outstanding, {"fieldtype": "Float", "precision": 2}) %}</td>
+			<td class="text-right">{%= row.age_days == null ? "" : row.age_days %}</td>
 		</tr>
 		{% endfor %}
 	</tbody>
