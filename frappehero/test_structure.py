@@ -17,7 +17,7 @@ class TestAppStructure(unittest.TestCase):
 		}
 		self.assertEqual(
 			modules,
-			{"Frappe Hero", "Permission Studio", "Accounts Mapping", "Access Desk", "Finance Desk"},
+			{"Frappe Hero", "Permission Studio", "Accounts Mapping", "Access Desk", "Finance Desk", "Dispute Desk"},
 		)
 		for path in PACKAGE.rglob("*.json"):
 			payload = json.loads(path.read_text())

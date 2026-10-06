@@ -1,6 +1,6 @@
 # Frappe Hero
 
-Desk tools for the awkward admin jobs in Frappe and ERPNext: who may use which records, and which accounts still have nowhere to go.
+Desk tools for the awkward admin jobs in Frappe and ERPNext: who may use which records, which accounts still have nowhere to go, and which invoices are in dispute.
 
 Requires Frappe 15 or newer and ERPNext. Permission Studio writes real [User Permissions](https://docs.frappe.io/erpnext/user-permissions). Account Mapper reads the chart of accounts.
 
@@ -13,7 +13,7 @@ bench --site your-site install-app frappehero
 bench --site your-site migrate
 ```
 
-Open the **Frappe Hero** workspace. System Manager can use every module. Accounts Manager can use Account Mapper, the unmapped report, and the finance desk.
+Open the **Frappe Hero** workspace. System Manager can use every module. Accounts Manager can use Account Mapper, the unmapped report, the finance desk, and the dispute desk.
 
 ## Permission Studio
 
@@ -86,6 +86,18 @@ System Manager and Accounts Manager.
 **Tax Template Mapper** walks item groups for one company. A group is mapped when it, or an ancestor, has an item tax template for that company. Items with no template of their own appear only when their group is unmapped. Assign a template to the groups you tick, or clear the templates for that company.
 
 **Opening and Reclass Desk** pastes a trial balance. Lines match with the same rules as Account Mapper: one account number, otherwise one account name. An ambiguous number stays unmatched. The desk creates a draft Journal Entry when every line is matched and debit minus credit is about zero.
+
+## Dispute Desk
+
+System Manager and Accounts Manager.
+
+A dispute always points at one sales invoice. The document that raised it can be that invoice, or a record from logistics, ERPNext, or another app. **Dispute Desk** asks for the source DocType, the source document, and the invoice. Sales Invoice has **Raise Dispute** under the Dispute menu. Other modules call `frappehero.dispute_desk.api.raise_dispute`.
+
+Opening the dispute releases every active action on that invoice. Hold, Collection, and Dunning are the usual kinds. A module can register any other kind on **Hero Invoice Action** with `register_invoice_action`. Released actions stay released after the dispute is resolved or cancelled. A second open dispute for the same invoice is rejected.
+
+**Statement of Account** and **Receivables Aging** still list the invoice. While the dispute is open it is left out of the amount due and the aging buckets, and shown under **Disputed Transactions**. Resolving or cancelling the dispute moves it back into the normal lines.
+
+On a site, an open ERPNext Dunning that names the invoice is marked Resolved. Draft dunning is left alone, and nothing is cancelled. A Sales Invoice hold (`on_hold` or `is_on_hold`) is cleared when that field exists.
 
 ## Tests
 

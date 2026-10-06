@@ -40,6 +40,7 @@ frappehero.ModuleIdeas = class ModuleIdeas {
 						<option value="Permissions">${__("Permissions")}</option>
 						<option value="Accounts">${__("Accounts")}</option>
 						<option value="Both">${__("Both")}</option>
+						<option value="Receivables">${__("Receivables")}</option>
 					</select>
 				</div>
 				<div class="fh-ideas"></div>

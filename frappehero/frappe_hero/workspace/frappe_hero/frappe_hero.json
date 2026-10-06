@@ -1,6 +1,6 @@
 {
  "charts": [],
- "content": "[{\"id\": \"fh_header\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h4\\\"><b>Frappe Hero</b></span><div class=\\\"text-muted\\\">Group people and the records they may use, map accounts, and review roles, access, defaults, shares, dimensions, tax, and opening balances.</div>\", \"col\": 12}}, {\"id\": \"fh_s1\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Permission Studio\", \"col\": 3}}, {\"id\": \"fh_s2\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Account Mapper\", \"col\": 3}}, {\"id\": \"fh_s3\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Unmapped Accounts\", \"col\": 3}}, {\"id\": \"fh_s4\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Next Modules\", \"col\": 3}}, {\"id\": \"fh_s5\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Role Composer\", \"col\": 3}}, {\"id\": \"fh_s6\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Access Review\", \"col\": 3}}, {\"id\": \"fh_s7\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Dimension Coverage\", \"col\": 3}}, {\"id\": \"fh_s8\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Opening Desk\", \"col\": 3}}, {\"id\": \"fh_c1\", \"type\": \"card\", \"data\": {\"card_name\": \"Permission Studio\", \"col\": 4}}, {\"id\": \"fh_c2\", \"type\": \"card\", \"data\": {\"card_name\": \"Accounts Mapping\", \"col\": 4}}, {\"id\": \"fh_c3\", \"type\": \"card\", \"data\": {\"card_name\": \"Access Desk\", \"col\": 4}}, {\"id\": \"fh_c4\", \"type\": \"card\", \"data\": {\"card_name\": \"Finance Desk\", \"col\": 4}}, {\"id\": \"fh_c5\", \"type\": \"card\", \"data\": {\"card_name\": \"Next\", \"col\": 4}}]",
+ "content": "[{\"id\": \"fh_header\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h4\\\"><b>Frappe Hero</b></span><div class=\\\"text-muted\\\">Group people and the records they may use, map accounts, and review roles, access, defaults, shares, dimensions, tax, opening balances, and disputed invoices.</div>\", \"col\": 12}}, {\"id\": \"fh_s1\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Permission Studio\", \"col\": 3}}, {\"id\": \"fh_s2\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Account Mapper\", \"col\": 3}}, {\"id\": \"fh_s3\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Unmapped Accounts\", \"col\": 3}}, {\"id\": \"fh_s4\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Next Modules\", \"col\": 3}}, {\"id\": \"fh_s5\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Role Composer\", \"col\": 3}}, {\"id\": \"fh_s6\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Access Review\", \"col\": 3}}, {\"id\": \"fh_s7\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Dimension Coverage\", \"col\": 3}}, {\"id\": \"fh_s8\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Opening Desk\", \"col\": 3}}, {\"id\": \"fh_s9\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Dispute Desk\", \"col\": 3}}, {\"id\": \"fh_c1\", \"type\": \"card\", \"data\": {\"card_name\": \"Permission Studio\", \"col\": 4}}, {\"id\": \"fh_c2\", \"type\": \"card\", \"data\": {\"card_name\": \"Accounts Mapping\", \"col\": 4}}, {\"id\": \"fh_c3\", \"type\": \"card\", \"data\": {\"card_name\": \"Access Desk\", \"col\": 4}}, {\"id\": \"fh_c4\", \"type\": \"card\", \"data\": {\"card_name\": \"Finance Desk\", \"col\": 4}}, {\"id\": \"fh_c6\", \"type\": \"card\", \"data\": {\"card_name\": \"Dispute Desk\", \"col\": 4}}, {\"id\": \"fh_c5\", \"type\": \"card\", \"data\": {\"card_name\": \"Next\", \"col\": 4}}]",
  "creation": "2026-10-05 00:00:00.000000",
  "custom_blocks": [],
  "doctype": "Workspace",
@@ -217,6 +217,64 @@
   {
    "hidden": 0,
    "is_query_report": 0,
+   "label": "Dispute Desk",
+   "link_count": 0,
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Dispute Desk",
+   "link_count": 0,
+   "link_to": "dispute-desk",
+   "link_type": "Page",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Disputes",
+   "link_count": 0,
+   "link_to": "Hero Dispute",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Invoice Actions",
+   "link_count": 0,
+   "link_to": "Hero Invoice Action",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Statement of Account",
+   "link_count": 0,
+   "link_to": "Statement of Account",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Receivables Aging",
+   "link_count": 0,
+   "link_to": "Receivables Aging",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
    "label": "Next",
    "link_count": 0,
    "onboard": 0,
@@ -298,6 +356,13 @@
    "doc_view": "",
    "label": "Opening Desk",
    "link_to": "opening-desk",
+   "type": "Page"
+  },
+  {
+   "color": "Red",
+   "doc_view": "",
+   "label": "Dispute Desk",
+   "link_to": "dispute-desk",
    "type": "Page"
   }
  ],
