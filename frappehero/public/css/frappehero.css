@@ -2,12 +2,16 @@
 
 .fh-page {
 	color: var(--text-color);
+	min-width: 0;
+	max-width: 100%;
 }
 
 .fh-app {
 	display: flex;
 	flex-direction: column;
 	gap: 20px;
+	min-width: 0;
+	max-width: 100%;
 }
 
 .fh-stats {
@@ -73,6 +77,8 @@
 	flex-wrap: wrap;
 	gap: 8px 12px;
 	align-items: end;
+	min-width: 0;
+	max-width: 100%;
 }
 
 .fh-filters .frappe-control,
@@ -101,9 +107,16 @@
 	min-height: 28px;
 }
 
+.fh-filters input,
+.fh-filters select,
+.fh-filters .frappe-control,
+.fh-filters .form-group {
+	max-width: 100%;
+}
+
 .fh-filters input[type="search"] {
-	min-width: 180px;
-	flex: 1;
+	min-width: min(180px, 100%);
+	flex: 1 1 180px;
 }
 
 .fh-check {
@@ -140,6 +153,13 @@
 
 .fh-btn,
 .fh-btn-quiet,
+.fh-btn-danger,
+.fh-roots button {
+	min-height: 32px;
+}
+
+.fh-btn,
+.fh-btn-quiet,
 .fh-btn-danger {
 	text-decoration: underline;
 	text-underline-offset: 3px;
@@ -164,6 +184,14 @@
 	font-size: 13px;
 }
 
+.fh-body,
+.fh-split,
+.fh-thirds,
+.fh-tree-layout {
+	min-width: 0;
+	max-width: 100%;
+}
+
 .fh-body {
 	display: grid;
 	grid-template-columns: 240px minmax(0, 1fr);
@@ -176,7 +204,14 @@
 .fh-tree-wrap,
 .fh-matrix-wrap {
 	max-height: calc(100vh - 160px);
+	max-width: 100%;
+	min-width: 0;
 	overflow: auto;
+}
+
+.fh-matrix-wrap .fh-matrix {
+	width: max-content;
+	min-width: 100%;
 }
 
 .fh-card,
@@ -190,7 +225,8 @@
 	border-bottom: 1px solid var(--border-color);
 	background: none;
 	color: inherit;
-	padding: 8px 0;
+	padding: 10px 0;
+	min-height: 44px;
 	cursor: pointer;
 	text-decoration: none;
 	font-weight: 400;
@@ -229,7 +265,8 @@
 
 .fh-detail-head {
 	display: flex;
-	gap: 16px;
+	flex-wrap: wrap;
+	gap: 12px 16px;
 	align-items: flex-start;
 	justify-content: space-between;
 }
@@ -286,12 +323,21 @@
 	cursor: pointer;
 	padding: 0;
 	margin-left: auto;
+	min-width: 32px;
+	min-height: 32px;
 }
 
 .fh-avatar {
 	color: var(--text-muted);
 	font-size: 12px;
 	flex: none;
+}
+
+.fh-rule,
+.fh-pick,
+.fh-detail,
+.fh-idea {
+	overflow-wrap: anywhere;
 }
 
 .fh-rule,
@@ -333,10 +379,11 @@
 }
 
 .fh-colors button {
-	width: 12px;
-	height: 12px;
+	width: 28px;
+	height: 28px;
 	border: 0;
-	padding: 0;
+	padding: 8px;
+	background-clip: content-box;
 	cursor: pointer;
 }
 
@@ -360,7 +407,8 @@
 	display: flex;
 	align-items: center;
 	gap: 6px;
-	padding: 3px 0;
+	min-height: 36px;
+	padding: 6px 0;
 	cursor: pointer;
 	background: none;
 }
@@ -402,6 +450,7 @@
 
 .fh-idea p {
 	margin: 0 0 4px;
+	max-width: 65ch;
 }
 
 .fh-idea .fh-btn {
@@ -414,8 +463,8 @@
 }
 
 .fh-cell {
-	min-width: 16px;
-	min-height: 16px;
+	min-width: 32px;
+	min-height: 32px;
 	text-decoration: none;
 }
 
@@ -425,18 +474,49 @@
 	gap: 32px;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 960px) {
+	.fh-app {
+		gap: 16px;
+	}
+
+	.fh-filters,
+	.fh-inline {
+		flex-direction: column;
+		align-items: stretch;
+	}
+
+	.fh-filters input,
+	.fh-filters select,
+	.fh-filters .frappe-control,
+	.fh-filters .form-group {
+		width: 100%;
+		min-width: 0;
+		flex: none;
+	}
+
 	.fh-body,
 	.fh-split,
 	.fh-thirds,
 	.fh-tree-layout {
 		grid-template-columns: 1fr;
+		gap: 16px;
 	}
 
-	.fh-list,
+	.fh-stats {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 12px 16px;
+	}
+
+	.fh-list {
+		max-height: 38vh;
+	}
+
 	.fh-detail,
 	.fh-tree-wrap,
-	.fh-matrix-wrap {
+	.fh-matrix-wrap,
+	.fh-form {
 		max-height: none;
+		max-width: none;
 	}
 }
