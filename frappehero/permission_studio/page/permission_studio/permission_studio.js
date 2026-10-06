@@ -177,7 +177,7 @@ frappehero.PermissionStudio = class PermissionStudio {
 		const extra =
 			ungrouped.length || this.state.ungrouped_total
 				? `
-				<div class="fh-section-head" style="padding:10px 12px 0">
+				<div class="fh-section-head">
 					<strong>${__("No group")}</strong>
 					<span class="fh-muted">${__("{0} shown of {1}", [
 						String(ungrouped.length),
@@ -304,7 +304,7 @@ frappehero.PermissionStudio = class PermissionStudio {
 					}</div>
 				</div>
 			</div>
-			<div class="fh-section-head" style="margin-top:14px">
+			<div class="fh-section-head">
 				<strong>${__("Who can use what")}</strong>
 				<input type="search" class="fh-local-search" placeholder="${__("Filter this group")}" value="${frappehero.esc(this.localQuery)}">
 			</div>

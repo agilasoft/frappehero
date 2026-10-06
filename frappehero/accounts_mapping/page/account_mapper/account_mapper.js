@@ -193,7 +193,7 @@ frappehero.AccountMapper = class AccountMapper {
 		const tree = this.state.tree || [];
 		this.treeEl.html(
 			tree.length
-				? `<div class="fh-section-head" style="padding:8px">
+				? `<div class="fh-section-head">
 						<button type="button" class="fh-btn-quiet" data-action="expand-all">${__("Expand all")}</button>
 						<button type="button" class="fh-btn-quiet" data-action="collapse-all">${__("Collapse all")}</button>
 						<span class="fh-muted fh-bulk-count">${__("{0} selected", [String(this.checked.size)])}</span>
