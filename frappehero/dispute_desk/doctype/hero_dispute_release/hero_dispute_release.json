@@ -1,0 +1,72 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "creation": "2026-10-06 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "action_kind",
+  "source_doctype",
+  "source_name",
+  "previous_state",
+  "invoice_action"
+ ],
+ "fields": [
+  {
+   "fieldname": "action_kind",
+   "fieldtype": "Data",
+   "label": "Action",
+   "reqd": 1,
+   "in_list_view": 1,
+   "columns": 2,
+   "read_only": 1
+  },
+  {
+   "fieldname": "source_doctype",
+   "fieldtype": "Link",
+   "label": "Source DocType",
+   "options": "DocType",
+   "in_list_view": 1,
+   "columns": 2,
+   "read_only": 1
+  },
+  {
+   "fieldname": "source_name",
+   "fieldtype": "Dynamic Link",
+   "label": "Source Name",
+   "options": "source_doctype",
+   "in_list_view": 1,
+   "columns": 2,
+   "read_only": 1
+  },
+  {
+   "fieldname": "previous_state",
+   "fieldtype": "Data",
+   "label": "Previous State",
+   "in_list_view": 1,
+   "columns": 2,
+   "read_only": 1
+  },
+  {
+   "fieldname": "invoice_action",
+   "fieldtype": "Link",
+   "label": "Invoice Action",
+   "options": "Hero Invoice Action",
+   "read_only": 1,
+   "ignore_user_permissions": 1
+  }
+ ],
+ "links": [],
+ "modified": "2026-10-06 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Dispute Desk",
+ "name": "Hero Dispute Release",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "istable": 1,
+ "editable_grid": 1,
+ "description": "One hold, collection, dunning, or other action released by a dispute."
+}

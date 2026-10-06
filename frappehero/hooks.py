@@ -1,7 +1,7 @@
 app_name = "frappehero"
 app_title = "Frappe Hero"
 app_publisher = "Agilasoft"
-app_description = "Group users and the documents they may use, map accounts, and review access, defaults, shares, dimensions, tax, and opening entries."
+app_description = "Group users and the documents they may use, map accounts, and review access, defaults, shares, dimensions, tax, opening entries, and invoice disputes."
 app_email = "dev@agilasoft.com"
 app_license = "mit"
 
@@ -22,6 +22,10 @@ app_include_js = "/assets/frappehero/js/frappehero.js"
 
 doctype_list_js = {
 	"Hero Permission Group": "public/js/hero_permission_group_list.js",
+}
+
+doctype_js = {
+	"Sales Invoice": "public/js/sales_invoice_dispute.js",
 }
 
 after_install = "frappehero.install.after_install"

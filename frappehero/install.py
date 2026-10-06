@@ -59,6 +59,35 @@ def get_custom_fields():
 				"description": "Every permission group that grants this same user, DocType, and value.",
 			},
 		],
+		"Sales Invoice": [
+			{
+				"fieldname": "hero_dispute_section",
+				"label": "Dispute",
+				"fieldtype": "Section Break",
+				"insert_after": "customer",
+				"collapsible": 1,
+			},
+			{
+				"fieldname": "hero_dispute",
+				"label": "Dispute",
+				"fieldtype": "Link",
+				"options": "Hero Dispute",
+				"insert_after": "hero_dispute_section",
+				"read_only": 1,
+				"no_copy": 1,
+				"in_standard_filter": 1,
+				"description": "The open dispute for this invoice. Statement of Account and Receivables Aging list it under Disputed Transactions.",
+			},
+			{
+				"fieldname": "hero_dispute_status",
+				"label": "Dispute Status",
+				"fieldtype": "Data",
+				"insert_after": "hero_dispute",
+				"read_only": 1,
+				"no_copy": 1,
+				"in_standard_filter": 1,
+			},
+		],
 		"DocShare": [
 			{
 				"fieldname": "hero_expires_on",

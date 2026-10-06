@@ -132,6 +132,22 @@ MODULE_IDEAS = [
 		),
 		"builds_on": "Permission groups are already a living list of people with a job to do.",
 	},
+	{
+		"name": "Dispute Desk",
+		"route": "dispute-desk",
+		"area": "Receivables",
+		"summary": "Raise a dispute from any module and lift collection activity on the invoice.",
+		"problem": (
+			"A shipment, a sales order, or an invoice can be wrong, while holds, collection, "
+			"and dunning keep running against the invoice."
+		),
+		"shape": (
+			"Record the source document and the sales invoice. Opening the dispute releases "
+			"every active hold, collection, dunning, or other action. Statement of Account and "
+			"Receivables Aging keep the invoice under Disputed Transactions until the dispute is closed."
+		),
+		"builds_on": "The same desk pattern as Finance Desk: rules that can be tested without a site, and a page that applies them.",
+	},
 ]
 
 
