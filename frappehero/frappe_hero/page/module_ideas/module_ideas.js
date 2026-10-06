@@ -30,9 +30,6 @@ frappehero.ModuleIdeas = class ModuleIdeas {
 		this.page.main.addClass("fh-page");
 		this.page.main.html(`
 			<div class="fh-app">
-				<p class="fh-muted">${__(
-					"Open a module. Search covers the same descriptions as the workspace cards."
-				)}</p>
 				<div class="fh-filters">
 					<input type="search" class="fh-search" placeholder="${__("Search ideas")}">
 					<select class="fh-area">
@@ -80,12 +77,9 @@ frappehero.ModuleIdeas = class ModuleIdeas {
 				.map(
 					(idea) => `
 					<article class="fh-idea">
-						<span class="fh-pill">${frappehero.esc(idea.area)}</span>
-						<h3>${frappehero.esc(idea.name)}</h3>
-						<p><strong>${frappehero.esc(idea.summary)}</strong></p>
-						<p>${frappehero.esc(idea.problem)}</p>
-						<p>${frappehero.esc(idea.shape)}</p>
-						<p class="fh-muted">${frappehero.esc(idea.builds_on)}</p>
+						<h3>${frappehero.esc(idea.name)} <span class="fh-muted">${frappehero.esc(idea.area)}</span></h3>
+						<p>${frappehero.esc(idea.summary)}</p>
+						<p class="fh-muted">${frappehero.esc(idea.problem)} ${frappehero.esc(idea.shape)} ${frappehero.esc(idea.builds_on)}</p>
 						${
 							idea.route
 								? `<div class="fh-actions"><button type="button" class="fh-btn" data-route="${frappehero.esc(idea.route)}">${__("Open")}</button></div>`
