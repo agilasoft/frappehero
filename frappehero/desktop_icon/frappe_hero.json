@@ -1,0 +1,22 @@
+{
+ "app": "frappehero",
+ "bg_color": "blue",
+ "creation": "2026-10-06 00:00:00.000000",
+ "docstatus": 0,
+ "doctype": "Desktop Icon",
+ "hidden": 0,
+ "icon": "shield",
+ "icon_type": "App",
+ "idx": 0,
+ "label": "Frappe Hero",
+ "link": "/desk/frappe-hero",
+ "link_type": "External",
+ "logo_url": "/assets/frappehero/images/logo.svg",
+ "modified": "2026-10-06 00:00:00.000000",
+ "modified_by": "Administrator",
+ "name": "Frappe Hero",
+ "owner": "Administrator",
+ "restrict_removal": 0,
+ "roles": [],
+ "standard": 1
+}

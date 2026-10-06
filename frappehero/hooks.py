@@ -7,13 +7,18 @@ app_license = "mit"
 
 required_apps = ["erpnext"]
 
+app_logo_url = "/assets/frappehero/images/logo.svg"
+app_color = "#2490ef"
+app_home = "/desk/frappe-hero"
+
 add_to_apps_screen = [
 	{
 		"name": "frappehero",
-		"logo": "/assets/frappehero/images/logo.svg",
+		"logo": app_logo_url,
 		"title": "Frappe Hero",
-		"route": "/app/frappe-hero",
+		"route": app_home,
 		"has_permission": "frappehero.api.has_app_permission",
+		"sequence_id": 50,
 	}
 ]
 

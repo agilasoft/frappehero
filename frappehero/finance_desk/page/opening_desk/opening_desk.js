@@ -87,7 +87,7 @@ frappehero.OpeningDesk = class OpeningDesk {
 					<div class="fh-muted">${frappehero.esc(batch.company)} · ${frappehero.esc(batch.posting_date)} · ${frappehero.esc(batch.purpose)}</div>
 				</div>
 				<div class="fh-actions">
-					${batch.journal_entry ? `<a class="fh-btn" href="/app/journal-entry/${encodeURIComponent(batch.journal_entry)}">${frappehero.esc(batch.journal_entry)}</a>` : `<button type="button" class="fh-btn" data-action="journal" ${batch.can_create ? "" : "disabled"}>${__("Create draft journal")}</button>`}
+					${batch.journal_entry ? `<button type="button" class="fh-btn" data-action="open-journal" data-name="${frappehero.esc(batch.journal_entry)}">${frappehero.esc(batch.journal_entry)}</button>` : `<button type="button" class="fh-btn" data-action="journal" ${batch.can_create ? "" : "disabled"}>${__("Create draft journal")}</button>`}
 				</div>
 			</div>
 			<div class="fh-stats">
@@ -122,6 +122,9 @@ frappehero.OpeningDesk = class OpeningDesk {
 		}
 		if (button.dataset.action === "match" && this.current) {
 			this.matchLine(button.dataset.line);
+		}
+		if (button.dataset.action === "open-journal") {
+			frappe.set_route("Form", "Journal Entry", button.dataset.name);
 		}
 		if (button.dataset.action === "journal" && this.current) {
 			const result = await frappehero.call("frappehero.finance_desk.api.create_opening_journal", { batch: this.current.name });

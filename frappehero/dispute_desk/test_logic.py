@@ -2,6 +2,7 @@
 # For license information, please see license.txt
 
 import unittest
+from pathlib import Path
 
 from frappehero.dispute_desk.logic import (
 	DISPUTED_SECTION,
@@ -9,8 +10,10 @@ from frappehero.dispute_desk.logic import (
 	DisputeError,
 	aging_bucket,
 	close_dispute,
+	filter_disputes,
 	raise_dispute,
 	receivables_aging,
+	rows_for_desk,
 	statement_of_account,
 )
 
@@ -122,16 +125,19 @@ class TestStatement(unittest.TestCase):
 		self.assertEqual(result["amount_due"], 125)
 		self.assertEqual(result["disputed_outstanding"], 40)
 		body = [row["sales_invoice"] for row in result["rows"]]
-		self.assertEqual(body, ["SINV-1", "SINV-3", "", "SINV-2"])
+		self.assertEqual(body, ["SINV-1", "SINV-3"])
 		self.assertEqual(result["rows"][0]["running_balance"], 100)
 		self.assertEqual(result["rows"][1]["running_balance"], 125)
-		section = result["rows"][2]
-		self.assertEqual(section["section"], DISPUTED_SECTION)
-		self.assertEqual(section["is_section"], 1)
-		disputed = result["rows"][3]
-		self.assertEqual(disputed["section"], DISPUTED_SECTION)
-		self.assertIsNone(disputed["running_balance"])
-		self.assertEqual(disputed["outstanding"], 40)
+		self.assertTrue(all(row["section"] == "" for row in result["rows"]))
+		disputed = result["disputed_rows"]
+		self.assertEqual([row["sales_invoice"] for row in disputed], ["SINV-2"])
+		self.assertEqual(disputed[0]["section"], DISPUTED_SECTION)
+		self.assertIsNone(disputed[0]["running_balance"])
+		self.assertEqual(disputed[0]["outstanding"], 40)
+		self.assertEqual(
+			[row["sales_invoice"] for row in rows_for_desk(result)],
+			["SINV-1", "SINV-3", "SINV-2"],
+		)
 
 	def test_resolved_dispute_returns_to_the_statement(self):
 		disputes = [{"name": "DISP-1", "sales_invoice": "SINV-2", "status": "Resolved"}]
@@ -146,6 +152,7 @@ class TestStatement(unittest.TestCase):
 		self.assertEqual([row["sales_invoice"] for row in result["rows"]], ["SINV-1", "SINV-2", "SINV-3"])
 		self.assertEqual(result["amount_due"], 165)
 		self.assertEqual(result["disputed_outstanding"], 0)
+		self.assertEqual(result["disputed_rows"], [])
 		self.assertTrue(all(row["section"] == "" for row in result["rows"]))
 
 
@@ -174,14 +181,91 @@ class TestAging(unittest.TestCase):
 		self.assertEqual(result["amount_due"], 42)
 		self.assertEqual(result["disputed_outstanding"], 50)
 		names = [row["sales_invoice"] for row in result["rows"]]
-		self.assertEqual(names, ["D91", "D30", "D31", "CUR", "", "D90"])
-		disputed = result["rows"][-1]
-		self.assertEqual(disputed["section"], DISPUTED_SECTION)
-		self.assertEqual(disputed["outstanding"], 50)
-		self.assertEqual(disputed["age_days"], 90)
-		self.assertEqual(disputed["days_61_90"], 0)
-		self.assertEqual(result["rows"][-2]["section"], DISPUTED_SECTION)
-		self.assertEqual(result["rows"][-2]["is_section"], 1)
+		self.assertEqual(names, ["D91", "D30", "D31", "CUR"])
+		self.assertTrue(all(not row["section"] for row in result["rows"]))
+		disputed = result["disputed_rows"]
+		self.assertEqual([row["sales_invoice"] for row in disputed], ["D90"])
+		self.assertEqual(disputed[0]["section"], DISPUTED_SECTION)
+		self.assertEqual(disputed[0]["outstanding"], 50)
+		self.assertEqual(disputed[0]["age_days"], 90)
+		self.assertEqual(disputed[0]["days_61_90"], 0)
+		self.assertEqual(
+			[row["sales_invoice"] for row in rows_for_desk(result)],
+			["D91", "D30", "D31", "CUR", "D90"],
+		)
+
+
+class TestDisputeFilters(unittest.TestCase):
+	def _rows(self):
+		return [
+			{
+				"name": "DISP-1",
+				"company": "Co",
+				"customer": "Acme",
+				"sales_invoice": "SINV-1",
+				"status": "Open",
+				"dispute_date": "2026-04-01",
+				"reason": "Short delivery",
+				"reference_doctype": "Shipment",
+				"reference_name": "SHIP-1",
+				"source_module": "Logistics",
+			},
+			{
+				"name": "DISP-2",
+				"company": "Co",
+				"customer": "Other",
+				"sales_invoice": "SINV-2",
+				"status": "Resolved",
+				"dispute_date": "2026-05-01",
+				"reason": "Price",
+				"reference_doctype": "Sales Invoice",
+				"reference_name": "SINV-2",
+				"source_module": "ERPNext",
+			},
+			{
+				"name": "DISP-3",
+				"company": "Other Co",
+				"customer": "Acme",
+				"sales_invoice": "SINV-3",
+				"status": "Open",
+				"dispute_date": "2026-04-15",
+				"reason": "Damage",
+				"reference_doctype": "Shipment",
+				"reference_name": "SHIP-9",
+				"source_module": "Logistics",
+			},
+		]
+
+	def test_filters_combine(self):
+		rows = self._rows()
+		self.assertEqual(
+			[row["name"] for row in filter_disputes(rows, company="Co", status="Open")],
+			["DISP-1"],
+		)
+		self.assertEqual(
+			[row["name"] for row in filter_disputes(rows, status="All")],
+			["DISP-1", "DISP-2", "DISP-3"],
+		)
+		self.assertEqual(
+			[row["name"] for row in filter_disputes(rows, text="ship-1")],
+			["DISP-1"],
+		)
+		self.assertEqual(
+			[row["name"] for row in filter_disputes(rows, customer="Acme", from_date="2026-04-10", to_date="2026-04-20")],
+			["DISP-3"],
+		)
+		self.assertEqual(filter_disputes(rows, sales_invoice="SINV-2"), [rows[1]])
+		self.assertEqual(filter_disputes(rows, text="short"), [rows[0]])
+
+	def test_printouts_section_disputed_transactions(self):
+		root = Path(__file__).resolve().parent / "report"
+		for name in ("statement_of_account", "receivables_aging"):
+			html = (root / name / f"{name}.html").read_text()
+			script = (root / name / f"{name}.js").read_text()
+			self.assertIn("Disputed Transactions", html)
+			self.assertIn("report.disputed_rows", html)
+			self.assertIn('row.section !== "Disputed Transactions"', script)
+			self.assertNotIn("Section", (root / name / f"{name}.py").read_text().split("def _summary")[0])
 
 
 def _invoice(name, posting_date, due_date, outstanding, customer="Acme", company="Co"):

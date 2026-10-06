@@ -1,0 +1,63 @@
+{
+ "app": "frappehero",
+ "creation": "2026-10-06 00:00:00.000000",
+ "docstatus": 0,
+ "doctype": "Dock",
+ "idx": 0,
+ "items": [
+  {
+   "added": 0,
+   "hidden": 0,
+   "icon": "shield",
+   "link_to": "Frappe Hero",
+   "link_type": "Sidebar",
+   "title": "Frappe Hero"
+  },
+  {
+   "added": 0,
+   "hidden": 0,
+   "icon": "users",
+   "link_to": "Permission Studio",
+   "link_type": "Sidebar",
+   "title": "Permission Studio"
+  },
+  {
+   "added": 0,
+   "hidden": 0,
+   "icon": "arrow-left-right",
+   "link_to": "Accounts Mapping",
+   "link_type": "Sidebar",
+   "title": "Accounts Mapping"
+  },
+  {
+   "added": 0,
+   "hidden": 0,
+   "icon": "key-round",
+   "link_to": "Access Desk",
+   "link_type": "Sidebar",
+   "title": "Access Desk"
+  },
+  {
+   "added": 0,
+   "hidden": 0,
+   "icon": "calculator",
+   "link_to": "Finance Desk",
+   "link_type": "Sidebar",
+   "title": "Finance Desk"
+  },
+  {
+   "added": 0,
+   "hidden": 0,
+   "icon": "scale",
+   "link_to": "Dispute Desk",
+   "link_type": "Sidebar",
+   "title": "Dispute Desk"
+  }
+ ],
+ "modified": "2026-10-06 00:00:00.000000",
+ "modified_by": "Administrator",
+ "name": "frappehero",
+ "owner": "Administrator",
+ "standard": 1,
+ "user": ""
+}

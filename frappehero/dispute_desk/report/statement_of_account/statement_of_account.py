@@ -5,7 +5,7 @@ import frappe
 from frappe import _
 
 from frappehero.dispute_desk.api import statement_rows
-from frappehero.dispute_desk.logic import DisputeError
+from frappehero.dispute_desk.logic import DisputeError, rows_for_desk
 from frappehero.flags import clean_text
 
 
@@ -21,7 +21,9 @@ def execute(filters=None):
 		result = statement_rows(company, customer, filters.get("from_date"), filters.get("to_date"))
 	except DisputeError as exc:
 		frappe.throw(_(str(exc)))
-	return columns, result["rows"]
+	# Disputed lines travel with the result so the printout can section them.
+	# The report script takes them off the table.
+	return columns, rows_for_desk(result), None, None, _summary(result)
 
 
 def _columns():
@@ -32,5 +34,11 @@ def _columns():
 		{"label": _("Due Date"), "fieldname": "due_date", "fieldtype": "Date", "width": 110},
 		{"label": _("Outstanding"), "fieldname": "outstanding", "fieldtype": "Float", "width": 120},
 		{"label": _("Running Balance"), "fieldname": "running_balance", "fieldtype": "Float", "width": 140},
-		{"label": _("Section"), "fieldname": "section", "fieldtype": "Data", "width": 180},
+	]
+
+
+def _summary(result):
+	return [
+		{"value": result["amount_due"], "label": _("Amount Due"), "datatype": "Float"},
+		{"value": result["disputed_outstanding"], "label": _("Disputed"), "datatype": "Float"},
 	]

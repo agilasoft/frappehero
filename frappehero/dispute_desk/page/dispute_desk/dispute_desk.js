@@ -27,28 +27,109 @@ frappehero.DisputeDesk = class DisputeDesk {
 		this.page = page;
 		this.rows = [];
 		this.current = null;
+		this.filters = { text: "", status: "All", from_date: "", to_date: "" };
 		this.page.main.addClass("fh-page");
 		this.page.set_primary_action(__("New Dispute"), () => this.createDispute(), "add");
-		this.page.main.html(
-			`<div class="fh-app"><div class="fh-body"><aside class="fh-list"></aside><section class="fh-detail"></section></div></div>`
-		);
+		this.page.main.html(`
+			<div class="fh-app">
+				<div class="fh-filters">
+					<input type="search" class="fh-search" placeholder="${__("Search invoice, customer, source, reason")}">
+					<div class="fh-company"></div>
+					<div class="fh-customer"></div>
+					<div class="fh-invoice"></div>
+					<select class="fh-status">
+						<option value="All">${__("All statuses")}</option>
+						<option value="Open">${__("Open")}</option>
+						<option value="Resolved">${__("Resolved")}</option>
+						<option value="Cancelled">${__("Cancelled")}</option>
+					</select>
+					<input type="date" class="fh-from" aria-label="${__("From date")}">
+					<input type="date" class="fh-to" aria-label="${__("To date")}">
+				</div>
+				<div class="fh-body"><aside class="fh-list"></aside><section class="fh-detail"></section></div>
+			</div>
+		`);
 		this.listEl = this.page.main.find(".fh-list");
 		this.detailEl = this.page.main.find(".fh-detail");
-		this.page.main.find(".fh-app").get(0).addEventListener("click", (event) => this.onClick(event));
+		this.companyControl = this.linkControl(".fh-company", "Company", __("Company"));
+		this.customerControl = this.linkControl(".fh-customer", "Customer", __("Customer"));
+		this.invoiceControl = this.linkControl(".fh-invoice", "Sales Invoice", __("Sales Invoice"));
+		this.companyControl.set_value(frappe.defaults.get_user_default("Company"));
+		this.companyControl.df.onchange = () => this.refresh();
+		this.customerControl.df.onchange = () => this.refresh();
+		this.invoiceControl.df.onchange = () => this.refresh();
+		const root = this.page.main.find(".fh-app").get(0);
+		root.addEventListener("click", (event) => this.onClick(event));
+		root.addEventListener("change", (event) => this.onFilterChange(event));
+		root.addEventListener("input", (event) => this.onFilterInput(event));
 		this.refresh();
 	}
 
+	linkControl(selector, options, label) {
+		return frappe.ui.form.make_control({
+			parent: this.page.main.find(selector),
+			df: { fieldtype: "Link", options, label },
+			render_input: true,
+		});
+	}
+
+	onFilterChange(event) {
+		const target = event.target;
+		if (target.classList.contains("fh-status")) {
+			this.filters.status = target.value;
+			this.refresh();
+		}
+		if (target.classList.contains("fh-from") || target.classList.contains("fh-to")) {
+			this.filters.from_date = this.page.main.find(".fh-from").val() || "";
+			this.filters.to_date = this.page.main.find(".fh-to").val() || "";
+			this.refresh();
+		}
+	}
+
+	onFilterInput(event) {
+		if (!event.target.classList.contains("fh-search")) {
+			return;
+		}
+		clearTimeout(this.timer);
+		this.timer = setTimeout(() => {
+			this.filters.text = event.target.value || "";
+			this.refresh();
+		}, 200);
+	}
+
+	filterArgs() {
+		return {
+			company: this.companyControl.get_value() || "",
+			customer: this.customerControl.get_value() || "",
+			sales_invoice: this.invoiceControl.get_value() || "",
+			status: this.filters.status,
+			text: this.filters.text,
+			from_date: this.filters.from_date,
+			to_date: this.filters.to_date,
+		};
+	}
+
 	async refresh() {
-		this.rows = await frappehero.call("frappehero.dispute_desk.api.list_disputes");
-		const names = (this.rows || []).map((row) => row.name);
+		const request = (this.request = (this.request || 0) + 1);
+		const rows = await frappehero.call("frappehero.dispute_desk.api.list_disputes", this.filterArgs());
+		if (request !== this.request) {
+			return;
+		}
+		const names = (rows || []).map((row) => row.name);
+		let current = null;
 		if (this.selected && names.includes(this.selected)) {
-			this.current = await frappehero.call("frappehero.dispute_desk.api.get_dispute", { name: this.selected });
+			current = await frappehero.call("frappehero.dispute_desk.api.get_dispute", { name: this.selected });
 		} else {
 			this.selected = names[0] || null;
-			this.current = this.selected
+			current = this.selected
 				? await frappehero.call("frappehero.dispute_desk.api.get_dispute", { name: this.selected })
 				: null;
 		}
+		if (request !== this.request) {
+			return;
+		}
+		this.rows = rows || [];
+		this.current = current;
 		this.render();
 	}
 
@@ -62,7 +143,7 @@ frappehero.DisputeDesk = class DisputeDesk {
 						<span class="fh-pill">${frappehero.esc(row.status)}</span>
 					</button>`
 				)
-				.join("") || `<div class="fh-empty">${__("No disputes yet.")}</div>`
+				.join("") || `<div class="fh-empty">${__("No disputes match these filters.")}</div>`
 		);
 		const dispute = this.current;
 		if (!dispute) {
@@ -126,7 +207,7 @@ frappehero.DisputeDesk = class DisputeDesk {
 			name: this.current.name,
 			status,
 		});
-		this.rows = await frappehero.call("frappehero.dispute_desk.api.list_disputes");
+		this.rows = await frappehero.call("frappehero.dispute_desk.api.list_disputes", this.filterArgs());
 		this.render();
 	}
 
@@ -210,7 +291,7 @@ frappehero.DisputeDesk = class DisputeDesk {
 			async (values) => {
 				this.current = await frappehero.call("frappehero.dispute_desk.api.raise_dispute", values);
 				this.selected = this.current.name;
-				this.rows = await frappehero.call("frappehero.dispute_desk.api.list_disputes");
+				this.rows = await frappehero.call("frappehero.dispute_desk.api.list_disputes", this.filterArgs());
 				this.render();
 			},
 			__("New Dispute"),

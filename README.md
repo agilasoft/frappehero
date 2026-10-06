@@ -13,7 +13,7 @@ bench --site your-site install-app frappehero
 bench --site your-site migrate
 ```
 
-Open the **Frappe Hero** workspace. System Manager can use every module. Accounts Manager can use Account Mapper, the unmapped report, the finance desk, and the dispute desk.
+**Frappe Hero** is an icon on the desktop and opens at `/desk/frappe-hero`. The dock lists Frappe Hero, Permission Studio, Accounts Mapping, Access Desk, Finance Desk, and Dispute Desk. System Manager can use every module. Accounts Manager can use Account Mapper, the unmapped report, the finance desk, and the dispute desk.
 
 ## Permission Studio
 
@@ -95,7 +95,9 @@ A dispute always points at one sales invoice. The document that raised it can be
 
 Opening the dispute releases every active action on that invoice. Hold, Collection, and Dunning are the usual kinds. A module can register any other kind on **Hero Invoice Action** with `register_invoice_action`. Released actions stay released after the dispute is resolved or cancelled. A second open dispute for the same invoice is rejected.
 
-**Statement of Account** and **Receivables Aging** still list the invoice. While the dispute is open it is left out of the amount due and the aging buckets, and shown under **Disputed Transactions**. Resolving or cancelling the dispute moves it back into the normal lines.
+**Dispute Desk** filters by company, customer, sales invoice, status, dispute date, and a search across the invoice, customer, source, and reason.
+
+**Statement of Account** and **Receivables Aging** leave an open dispute out of the amount due and the aging buckets. The on-screen table is only the invoices still due. **Disputed Transactions** is a section on the printout. Resolving or cancelling the dispute moves the invoice back into the table.
 
 On a site, an open ERPNext Dunning that names the invoice is marked Resolved. Draft dunning is left alone, and nothing is cancelled. A Sales Invoice hold (`on_hold` or `is_on_hold`) is cleared when that field exists.
 
