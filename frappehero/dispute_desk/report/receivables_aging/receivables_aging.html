@@ -1,3 +1,13 @@
+<style>
+.fh-print h2, .fh-print h3 { font-size: 13px; font-weight: 600; margin: 16px 0 6px; }
+.fh-print h2 { margin-top: 0; }
+.fh-print p { margin: 0 0 8px; }
+.fh-print table { width: 100%; border-collapse: collapse; }
+.fh-print th, .fh-print td { padding: 3px 12px 3px 0; border-bottom: 1px solid #ddd; text-align: left; font-weight: 400; }
+.fh-print th { color: #666; font-weight: 500; }
+.fh-print .text-right { text-align: right; }
+</style>
+<div class="fh-print">
 <h2>{{ title }}</h2>
 {% if (subtitle) { %}
 <p>{{ subtitle }}</p>
@@ -6,7 +16,7 @@
 	{%= __("Amount due") %}:
 	{%= frappe.format((data || []).reduce(function (sum, row) { return sum + (+row.outstanding || 0); }, 0), {"fieldtype": "Float", "precision": 2}) %}
 </p>
-<table class="table table-bordered">
+<table>
 	<thead>
 		<tr>
 			<th>{%= __("Customer") %}</th>
@@ -44,7 +54,7 @@
 	{%= __("Open disputes. Left out of the aging buckets.") %}
 	{%= frappe.format(report.disputed_rows.reduce(function (sum, row) { return sum + (+row.outstanding || 0); }, 0), {"fieldtype": "Float", "precision": 2}) %}
 </p>
-<table class="table table-bordered">
+<table>
 	<thead>
 		<tr>
 			<th>{%= __("Customer") %}</th>
@@ -67,3 +77,4 @@
 	</tbody>
 </table>
 {% } %}
+</div>

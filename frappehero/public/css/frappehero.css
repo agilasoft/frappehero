@@ -1,4 +1,4 @@
-/* Frappe Hero desk pages. Flat layout that follows the desk theme. */
+/* Frappe Hero desk pages. Type, space, and a hairline. No hover or motion. */
 
 .fh-page {
 	color: var(--text-color);
@@ -7,13 +7,13 @@
 .fh-app {
 	display: flex;
 	flex-direction: column;
-	gap: 16px;
+	gap: 20px;
 }
 
 .fh-stats {
 	display: flex;
 	flex-wrap: wrap;
-	gap: 4px 24px;
+	gap: 4px 28px;
 }
 
 .fh-stat b {
@@ -31,13 +31,9 @@
 	font-size: 12px;
 }
 
-.fh-coverage {
-	padding: 0;
-}
-
 .fh-bar {
 	display: flex;
-	height: 4px;
+	height: 2px;
 	overflow: hidden;
 	background: var(--border-color);
 	margin: 6px 0;
@@ -49,12 +45,12 @@
 }
 
 .fh-bar .mapped,
-.fh-dot-mapped { background: #16a34a; }
+.fh-dot-mapped { background: currentColor; }
 .fh-bar .partial,
-.fh-dot-partial { background: #d97706; }
+.fh-dot-partial { background: currentColor; opacity: 0.55; }
 .fh-bar .unmapped,
-.fh-dot-unmapped { background: #dc2626; }
-.fh-bar .grouped { background: var(--text-color); }
+.fh-dot-unmapped { background: currentColor; opacity: 0.3; }
+.fh-bar .grouped { background: currentColor; }
 
 .fh-legend {
 	display: flex;
@@ -69,14 +65,13 @@
 	display: inline-block;
 	width: 6px;
 	height: 6px;
-	border-radius: 99px;
 	margin-right: 4px;
 }
 
 .fh-filters {
 	display: flex;
 	flex-wrap: wrap;
-	gap: 8px;
+	gap: 8px 12px;
 	align-items: end;
 }
 
@@ -97,11 +92,12 @@
 .fh-detail select,
 .fh-form input[type="text"],
 .fh-form select {
-	border: 1px solid var(--border-color);
-	border-radius: var(--border-radius-sm, 4px);
-	background: var(--control-bg, var(--fg-color));
+	border: 0;
+	border-bottom: 1px solid var(--border-color);
+	border-radius: 0;
+	background: transparent;
 	color: var(--text-color);
-	padding: 4px 8px;
+	padding: 4px 0;
 	min-height: 28px;
 }
 
@@ -123,7 +119,7 @@
 .fh-section-head,
 .fh-inline {
 	display: flex;
-	gap: 8px;
+	gap: 12px;
 	align-items: center;
 	flex-wrap: wrap;
 }
@@ -131,58 +127,56 @@
 .fh-roots button,
 .fh-btn,
 .fh-btn-quiet,
-.fh-btn-danger {
-	border: 1px solid var(--border-color);
-	border-radius: var(--border-radius-sm, 4px);
-	background: transparent;
+.fh-btn-danger,
+.fh-cell {
+	border: 0;
+	border-radius: 0;
+	background: none;
 	color: var(--text-color);
-	padding: 4px 10px;
+	padding: 0;
 	cursor: pointer;
 	font-weight: 500;
 }
 
-.fh-roots button.fh-on {
-	border-color: var(--text-color);
+.fh-btn,
+.fh-btn-quiet,
+.fh-btn-danger {
+	text-decoration: underline;
+	text-underline-offset: 3px;
+}
+
+.fh-roots button.fh-on,
+.fh-card.fh-selected,
+.fh-row.fh-row-selected {
 	font-weight: 600;
 }
 
 .fh-btn:disabled {
-	opacity: 0.45;
+	opacity: 0.4;
 	cursor: not-allowed;
 }
 
-.fh-btn-quiet,
 .fh-btn-danger {
-	border-color: transparent;
-	padding-left: 0;
-	padding-right: 0;
-}
-
-.fh-btn-danger {
-	color: #dc2626;
+	color: var(--text-muted);
 }
 
 .fh-banner {
-	color: #dc2626;
 	font-size: 13px;
 }
 
 .fh-body {
 	display: grid;
-	grid-template-columns: 260px minmax(0, 1fr);
-	gap: 24px;
+	grid-template-columns: 240px minmax(0, 1fr);
+	gap: 32px;
 	align-items: start;
 }
 
 .fh-list,
 .fh-detail,
-.fh-tree-wrap {
-	max-height: calc(100vh - 180px);
+.fh-tree-wrap,
+.fh-matrix-wrap {
+	max-height: calc(100vh - 160px);
 	overflow: auto;
-}
-
-.fh-detail {
-	padding: 0;
 }
 
 .fh-card,
@@ -194,21 +188,17 @@
 	align-items: center;
 	border: 0;
 	border-bottom: 1px solid var(--border-color);
-	background: transparent;
+	background: none;
 	color: inherit;
 	padding: 8px 0;
 	cursor: pointer;
-}
-
-.fh-card.fh-selected,
-.fh-row.fh-row-selected {
-	background: var(--fg-hover-color, var(--control-bg));
+	text-decoration: none;
+	font-weight: 400;
 }
 
 .fh-swatch {
 	width: 8px;
 	height: 8px;
-	border-radius: 99px;
 	flex: none;
 }
 
@@ -224,42 +214,45 @@
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+	font-weight: inherit;
 }
 
-.fh-pill {
+.fh-pill,
+.fh-pill-attention,
+.fh-pill-sync {
 	font-size: 12px;
-	font-weight: 500;
+	font-weight: 400;
 	color: var(--text-muted);
+	background: none;
 	white-space: nowrap;
 }
 
-.fh-pill-attention { color: #b45309; }
-.fh-pill-sync { color: #15803d; }
-
 .fh-detail-head {
 	display: flex;
-	gap: 12px;
+	gap: 16px;
 	align-items: flex-start;
 	justify-content: space-between;
 }
 
-.fh-detail-head h2 {
-	margin: 0 0 2px;
-	font-size: 16px;
+.fh-detail-head h2,
+.fh-idea h3 {
+	margin: 0 0 4px;
+	font-size: 15px;
 	font-weight: 600;
 }
 
-.fh-detail textarea {
+.fh-detail textarea,
+.fh-wide {
 	width: 100%;
-	min-height: 56px;
+	min-height: 72px;
 	margin-top: 8px;
 }
 
 .fh-split {
 	display: grid;
 	grid-template-columns: 1fr 1fr;
-	gap: 24px;
-	margin-top: 16px;
+	gap: 32px;
+	margin-top: 20px;
 }
 
 .fh-section {
@@ -273,37 +266,31 @@
 
 .fh-chips {
 	display: flex;
-	flex-wrap: wrap;
-	gap: 6px;
+	flex-direction: column;
+	gap: 4px;
 }
 
 .fh-chip {
-	display: inline-flex;
+	display: flex;
 	align-items: center;
-	gap: 6px;
+	gap: 8px;
 	font-size: 13px;
-	padding: 2px 0;
-	margin-right: 8px;
+	padding: 4px 0;
+	border-bottom: 1px solid var(--border-color);
 }
 
 .fh-chip button {
 	border: 0;
-	background: transparent;
+	background: none;
 	color: var(--text-muted);
 	cursor: pointer;
 	padding: 0;
+	margin-left: auto;
 }
 
 .fh-avatar {
-	width: 18px;
-	height: 18px;
-	border-radius: 99px;
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	background: var(--control-bg);
 	color: var(--text-muted);
-	font-size: 9px;
+	font-size: 12px;
 	flex: none;
 }
 
@@ -318,10 +305,6 @@
 	font-size: 13px;
 }
 
-.fh-matrix-wrap {
-	overflow: auto;
-}
-
 .fh-matrix {
 	border-collapse: collapse;
 	width: 100%;
@@ -331,76 +314,62 @@
 .fh-matrix th,
 .fh-matrix td {
 	border-bottom: 1px solid var(--border-color);
-	padding: 6px 8px;
+	padding: 6px 8px 6px 0;
 	vertical-align: top;
 	text-align: left;
+	background: none;
+	font-weight: 400;
 }
 
 .fh-matrix thead th {
-	position: sticky;
-	top: 0;
-	font-weight: 500;
 	color: var(--text-muted);
-	background: var(--fg-color, var(--card-bg));
-}
-
-.fh-matrix th:first-child,
-.fh-matrix td:first-child {
-	position: sticky;
-	left: 0;
-	background: var(--fg-color, var(--card-bg));
-	min-width: 120px;
+	font-weight: 500;
 }
 
 .fh-colors {
 	display: flex;
-	gap: 6px;
-	margin-top: 6px;
+	gap: 8px;
+	margin-top: 8px;
 }
 
 .fh-colors button {
-	width: 14px;
-	height: 14px;
-	border-radius: 99px;
-	border: 1px solid transparent;
-	cursor: pointer;
+	width: 12px;
+	height: 12px;
+	border: 0;
 	padding: 0;
+	cursor: pointer;
 }
 
 .fh-colors button.fh-on {
-	border-color: var(--text-color);
+	outline: 1px solid var(--text-color);
+	outline-offset: 2px;
 }
 
 .fh-empty {
-	padding: 12px 0;
+	padding: 8px 0;
 	color: var(--text-muted);
 }
 
 .fh-tree-layout {
 	display: grid;
-	grid-template-columns: minmax(0, 1.4fr) minmax(240px, 0.8fr);
-	gap: 24px;
+	grid-template-columns: minmax(0, 1.5fr) minmax(220px, 0.7fr);
+	gap: 32px;
 }
 
 .fh-row {
 	display: flex;
 	align-items: center;
 	gap: 6px;
-	padding: 4px 0;
+	padding: 3px 0;
 	cursor: pointer;
-}
-
-.fh-row:hover,
-.fh-card:hover,
-.fh-user-row:hover {
-	background: var(--fg-hover-color, transparent);
+	background: none;
 }
 
 .fh-chevron,
 .fh-chevron-spacer {
 	width: 16px;
 	border: 0;
-	background: transparent;
+	background: none;
 	color: var(--text-muted);
 	cursor: pointer;
 	padding: 0;
@@ -409,7 +378,8 @@
 .fh-form {
 	display: flex;
 	flex-direction: column;
-	gap: 8px;
+	gap: 10px;
+	max-width: 360px;
 }
 
 .fh-form label {
@@ -426,62 +396,33 @@
 }
 
 .fh-idea {
-	padding: 12px 0;
+	padding: 14px 0;
 	border-bottom: 1px solid var(--border-color);
-}
-
-.fh-idea h3 {
-	margin: 0 0 4px;
-	font-size: 15px;
-	font-weight: 600;
 }
 
 .fh-idea p {
 	margin: 0 0 4px;
 }
 
-.fh-idea .fh-actions,
 .fh-idea .fh-btn {
 	margin-top: 6px;
 }
 
 .fh-loading {
-	opacity: 0.55;
+	opacity: 0.5;
 	pointer-events: none;
 }
 
-.fh-bad td:first-child {
-	color: #dc2626;
-}
-
-.fh-ok {
-	color: #15803d;
-}
-
 .fh-cell {
-	min-width: 28px;
-	min-height: 24px;
-	border: 1px solid var(--border-color);
-	background: transparent;
-	color: var(--text-color);
-	cursor: pointer;
-}
-
-.fh-cell.fh-on {
-	background: var(--text-color);
-	border-color: var(--text-color);
-	color: var(--fg-color, #fff);
-}
-
-.fh-wide {
-	width: 100%;
-	min-height: 96px;
+	min-width: 16px;
+	min-height: 16px;
+	text-decoration: none;
 }
 
 .fh-thirds {
 	display: grid;
 	grid-template-columns: repeat(3, minmax(0, 1fr));
-	gap: 24px;
+	gap: 32px;
 }
 
 @media (max-width: 900px) {
@@ -494,7 +435,8 @@
 
 	.fh-list,
 	.fh-detail,
-	.fh-tree-wrap {
+	.fh-tree-wrap,
+	.fh-matrix-wrap {
 		max-height: none;
 	}
 }
