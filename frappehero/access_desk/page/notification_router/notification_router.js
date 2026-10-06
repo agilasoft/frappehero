@@ -29,8 +29,7 @@ frappehero.NotificationRouter = class NotificationRouter {
 		this.page.main.addClass("fh-page");
 		this.page.main.html(`
 			<div class="fh-app">
-				<p class="fh-muted">${__("Each route emails a permission group once a day. Send Now uses the same rule.")}</p>
-				<div class="fh-coverage fh-form">
+				<div class="fh-form">
 					<label>${__("Route name")}<input type="text" class="fh-name"></label>
 					<label>${__("Event")}
 						<select class="fh-event">
@@ -75,10 +74,9 @@ frappehero.NotificationRouter = class NotificationRouter {
 				.map(
 					(row) => `
 					<article class="fh-idea">
-						<span class="fh-pill">${frappehero.esc(row.event)}</span>
-						<h3>${frappehero.esc(row.name)}</h3>
+						<h3>${frappehero.esc(row.name)} <span class="fh-muted">${frappehero.esc(row.event)}</span></h3>
 						<p>${frappehero.esc(row.permission_group)} · ${__("Recipients {0}", [String(row.recipients || 0)])}</p>
-						<p class="fh-muted">${__("Last sent")} ${frappehero.esc(row.last_sent || __("never"))}. ${frappehero.esc(row.last_summary || "")}</p>
+						<p class="fh-muted">${__("Last sent")} ${frappehero.esc(row.last_sent || __("never"))}${row.last_summary ? ` · ${frappehero.esc(row.last_summary)}` : ""}</p>
 						<button type="button" class="fh-btn" data-action="send" data-name="${frappehero.esc(row.name)}">${__("Send Now")}</button>
 					</article>`
 				)
