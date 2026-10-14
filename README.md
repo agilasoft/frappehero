@@ -19,7 +19,7 @@ bench --site your-site migrate
 
 User Permissions are one row per user, per document, per value. Permission Studio starts from the team instead.
 
-1. Create a group, for example "North sales" or "Warehouse A".
+1. Create a group, for example "North sales" or "Warehouse A". Edit the group name in the header and save. The rename follows the group into User Permissions, reviews, and shares.
 2. Add users. Filter the picker by role, user type, and whether the user is enabled. People who already belong to a group are marked.
 3. Add permitted values. Pick a DocType, tick the records (companies, territories, branches, warehouses), and choose:
    - **Apply to all document types**, or limit the rule with **Applicable For**

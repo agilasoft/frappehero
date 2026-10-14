@@ -34,6 +34,11 @@ class HeroPermissionGroup(Document):
 	def on_update(self):
 		reconcile()
 
+	def after_rename(self, old, new, merge=False):
+		# Link fields move with the document. Source group text is a plain
+		# string, so rebuild managed User Permissions under the new name.
+		reconcile()
+
 	def on_trash(self):
 		reconcile(exclude_groups={self.name})
 		# Drop any link that would block deletion if a row was left pointing here.

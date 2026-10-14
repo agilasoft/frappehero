@@ -76,6 +76,7 @@ frappehero.PermissionStudio = class PermissionStudio {
 		root.addEventListener("click", (event) => this.onClick(event));
 		root.addEventListener("change", (event) => this.onChange(event));
 		root.addEventListener("input", (event) => this.onInput(event));
+		root.addEventListener("keydown", (event) => this.onKeydown(event));
 		this.searchTimer = null;
 	}
 
@@ -161,11 +162,12 @@ frappehero.PermissionStudio = class PermissionStudio {
 						: group.sync_status === "In Sync"
 							? "fh-pill-sync"
 							: "";
+				const title = group.group_name || group.name;
 				return `
 					<button type="button" class="fh-card ${group.name === this.selected ? "fh-selected" : ""}" data-action="select-group" data-name="${frappehero.esc(group.name)}">
 						<span class="fh-swatch" style="background:${frappehero.safe_color(group.color)}"></span>
 						<span class="fh-card-text">
-							<strong>${frappehero.esc(group.name)}</strong>
+							<strong>${frappehero.esc(title)}</strong>
 							<span class="fh-muted">${__("{0} members · {1} rules", [String(group.members.length), String(group.rules.length)])}</span>
 						</span>
 						<span class="fh-pill ${statusClass}">${frappehero.esc(group.enabled ? group.sync_status : __("Disabled"))}</span>
@@ -237,10 +239,14 @@ frappehero.PermissionStudio = class PermissionStudio {
 		const view = this.localSlice(group);
 		const focus = document.activeElement && document.activeElement.classList.contains("fh-local-search");
 		const cursor = focus ? document.activeElement.selectionStart : null;
+		const title = group.group_name || group.name;
 		this.detailEl.html(`
 			<div class="fh-detail-head">
 				<div style="flex:1">
-					<h2>${frappehero.esc(group.name)}</h2>
+					<label class="fh-name">
+						<span class="fh-muted">${__("Group name")}</span>
+						<input type="text" class="fh-group-name" value="${frappehero.esc(title)}" maxlength="140" autocomplete="off" aria-label="${__("Group name")}">
+					</label>
 					<div class="fh-colors">${this.colors
 						.map(
 							(color) =>
@@ -363,6 +369,13 @@ frappehero.PermissionStudio = class PermissionStudio {
 		}
 	}
 
+	onKeydown(event) {
+		if (event.key === "Enter" && event.target.matches(".fh-group-name")) {
+			event.preventDefault();
+			this.saveMeta();
+		}
+	}
+
 	onChange(event) {
 		if (event.target.matches(".fh-role")) {
 			this.filters.role = event.target.value;
@@ -420,18 +433,31 @@ frappehero.PermissionStudio = class PermissionStudio {
 		}
 		overrides = overrides || {};
 		const description = this.detailEl.find(".fh-description").val();
+		const nameInput = this.detailEl.find(".fh-group-name");
+		const typedName = nameInput.length ? nameInput.val() : null;
 		const enabled = Object.prototype.hasOwnProperty.call(overrides, "enabled")
 			? overrides.enabled
 			: this.detailEl.find(".fh-enabled").is(":checked")
 				? 1
 				: 0;
-		await frappehero.call("frappehero.permission_studio.api.update_group", {
+		const result = await frappehero.call("frappehero.permission_studio.api.update_group", {
 			name: group.name,
+			group_name: typedName,
 			description: description == null ? group.description : description,
 			color: overrides.color || group.color,
 			enabled,
 		});
-		this.refresh();
+		const next = (result && result.name) || group.name;
+		if (next !== group.name) {
+			frappe.show_alert({ message: __("Renamed to {0}", [next]), indicator: "green" });
+		}
+		this.selected = next;
+		await this.refresh();
+		const routeName = frappe.get_route()[1];
+		if (next !== group.name && routeName && decodeURIComponent(routeName) === group.name) {
+			this.focusGroup = next;
+			frappe.set_route("permission-studio", next);
+		}
 	}
 
 	deleteSelected() {
