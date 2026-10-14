@@ -43,6 +43,23 @@ def scopes_overlap(left: dict, right: dict) -> bool:
 	return clean_text(left.get("applicable_for")) == clean_text(right.get("applicable_for"))
 
 
+def requested_group_name(current_name, requested_name) -> str | None:
+	"""Return the document name a rename should use.
+
+	``None`` means the name stays as it is: the caller omitted a name, or sent
+	the name the document already has. An empty string means the request is
+	blank and should be rejected.
+	"""
+	if requested_name is None:
+		return None
+	requested = clean_text(requested_name)
+	if not requested:
+		return ""
+	if requested == clean_text(current_name):
+		return None
+	return requested
+
+
 def validate_group_shape(group: dict) -> list[str]:
 	"""Return human-readable problems with a group. An empty list means it can be saved."""
 	errors = []

@@ -278,6 +278,21 @@
 	font-weight: 600;
 }
 
+.fh-name {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	width: 100%;
+	margin: 0 0 4px;
+	font-weight: 400;
+}
+
+.fh-group-name {
+	font-size: 15px;
+	font-weight: 600;
+	width: 100%;
+}
+
 .fh-detail textarea,
 .fh-wide {
 	width: 100%;

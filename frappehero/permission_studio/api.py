@@ -12,6 +12,7 @@ from frappehero.permission_studio.logic import (
 	default_conflicts,
 	group_matches,
 	matrix_for,
+	requested_group_name,
 )
 from frappehero.permission_studio.sync import reconcile
 
@@ -116,9 +117,21 @@ def update_group(
 	description: str | None = None,
 	color: str | None = None,
 	enabled: int | str = 1,
+	group_name: str | None = None,
 ) -> dict:
+	"""Update the group's description, color, and enabled flag.
+
+	``group_name``, when sent, renames the document. The name is the primary
+	key, so links such as reviews, shares, and managed User Permissions follow it.
+	"""
 	frappe.only_for("System Manager")
-	doc = frappe.get_doc("Hero Permission Group", name)
+	current = clean_text(name)
+	target = requested_group_name(current, group_name)
+	if target == "":
+		frappe.throw(_("Group name is required."), title=_("Check the permission group"))
+	if target:
+		current = frappe.rename_doc("Hero Permission Group", current, target, show_alert=False)
+	doc = frappe.get_doc("Hero Permission Group", current)
 	doc.description = description or ""
 	doc.color = color or doc.color
 	doc.enabled = as_flag(enabled)

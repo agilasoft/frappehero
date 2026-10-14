@@ -12,6 +12,7 @@ from frappehero.permission_studio.logic import (
 	diff_permissions,
 	group_matches,
 	matrix_for,
+	requested_group_name,
 	validate_group_shape,
 )
 
@@ -79,6 +80,19 @@ class TestGroupShape(unittest.TestCase):
 
 	def test_rejects_bad_color(self):
 		self.assertTrue(any("Color" in error for error in validate_group_shape(_group(color="blue"))))
+
+
+class TestGroupRename(unittest.TestCase):
+	def test_keeps_the_name_when_the_request_is_missing_or_unchanged(self):
+		self.assertIsNone(requested_group_name("North", None))
+		self.assertIsNone(requested_group_name("North", "North"))
+		self.assertIsNone(requested_group_name("North", "  North  "))
+
+	def test_returns_a_cleaned_new_name(self):
+		self.assertEqual(requested_group_name("North", "  North sales  "), "North sales")
+
+	def test_blank_name_is_rejected(self):
+		self.assertEqual(requested_group_name("North", "   "), "")
 
 
 class TestGrants(unittest.TestCase):
