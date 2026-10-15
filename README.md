@@ -87,6 +87,8 @@ System Manager and Accounts Manager.
 
 **Opening and Reclass Desk** pastes a trial balance. Lines match with the same rules as Account Mapper: one account number, otherwise one account name. An ambiguous number stays unmatched. The desk creates a draft Journal Entry when every line is matched and debit minus credit is about zero.
 
+**BSP Rates** reads the Bangko Sentral ng Pilipinas daily reference bulletin and writes Currency Exchange rows. The rate is pesos per one unit of the foreign currency. USD uses the BSP reference rate. Other currencies use the peso equivalent on the bulletin. SDR and metals are left out. A rate typed by hand for that date and pair stays as it is. **Write inverse** also stores PHP to the foreign currency, because ERPNext does not turn a pair around on its own. The daily job fills bulletins in the lookback window that are not already stored. Turn that job off on BSP Settings. Preview a range of up to 31 days, then apply it.
+
 ## Dispute Desk
 
 System Manager and Accounts Manager.

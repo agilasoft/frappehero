@@ -4,6 +4,14 @@
 import frappe
 from frappe import _
 
+from frappehero.finance_desk.bsp import (
+	add_days,
+	clean_lookback,
+	dates_with_bsp_rows,
+	parse_range,
+	plan_rates,
+)
+from frappehero.finance_desk.bsp_client import BspError, fetch_rates
 from frappehero.finance_desk.logic import (
 	DIMENSIONS,
 	can_create_journal,
@@ -363,6 +371,168 @@ def _assign_template(item_group, item_tax_template) -> bool:
 	doc.append("taxes", {"item_tax_template": item_tax_template})
 	doc.save(ignore_permissions=True)
 	return True
+
+
+@frappe.whitelist()
+def get_bsp_settings() -> dict:
+	_finance()
+	return _bsp_settings()
+
+
+@frappe.whitelist()
+def save_bsp_settings(enabled=1, write_inverse=1, lookback_days=5) -> dict:
+	_finance()
+	try:
+		days = clean_lookback(lookback_days)
+	except ValueError as exc:
+		frappe.throw(str(exc))
+	doc = frappe.get_single("Hero BSP Settings")
+	doc.enabled = as_flag(enabled)
+	doc.write_inverse = as_flag(write_inverse)
+	doc.lookback_days = days
+	doc.save(ignore_permissions=True)
+	return _bsp_settings()
+
+
+@frappe.whitelist()
+def preview_bsp_rates(from_date: str, to_date: str) -> dict:
+	_finance()
+	return _collect_bsp(from_date, to_date, write=False)
+
+
+@frappe.whitelist()
+def apply_bsp_rates(from_date: str, to_date: str) -> dict:
+	_finance()
+	_require_bsp_field()
+	return _collect_bsp(from_date, to_date, write=True)
+
+
+def sync_recent_bsp_rates() -> dict:
+	"""Daily fill. Dates that already have a BSP row are not downloaded again."""
+	if not frappe.db.exists("DocType", "Hero BSP Settings"):
+		return {"skipped": "settings"}
+	if not frappe.db.table_exists("Currency Exchange"):
+		return {"skipped": "currency exchange"}
+	settings = _bsp_settings()
+	if not settings["enabled"]:
+		return {"skipped": "disabled"}
+	if not frappe.get_meta("Currency Exchange").has_field("hero_bsp"):
+		return {"skipped": "field"}
+	today = frappe.utils.today()
+	start = add_days(today, -settings["lookback_days"])
+	return _collect_bsp(start, today, write=True, only_missing=True)
+
+
+def _bsp_settings() -> dict:
+	if not frappe.db.exists("DocType", "Hero BSP Settings"):
+		frappe.throw(_("BSP Rates is not ready. Update the site and try again."))
+	doc = frappe.get_single("Hero BSP Settings")
+	try:
+		lookback = clean_lookback(doc.lookback_days)
+	except ValueError:
+		lookback = clean_lookback(None)
+	return {
+		"enabled": as_flag(doc.enabled),
+		"write_inverse": as_flag(doc.write_inverse),
+		"lookback_days": lookback,
+	}
+
+
+def _require_bsp_field():
+	if not frappe.get_meta("Currency Exchange").has_field("hero_bsp"):
+		frappe.throw(_("Update the site so Currency Exchange can store a BSP rate."))
+
+
+def _collect_bsp(from_date, to_date, write: bool, only_missing: bool = False) -> dict:
+	try:
+		start, end = parse_range(from_date, to_date)
+	except ValueError as exc:
+		frappe.throw(str(exc))
+	settings = _bsp_settings()
+	existing = _existing_rates(start, end)
+	stored = dates_with_bsp_rows(existing) if only_missing else set()
+	try:
+		fetched = fetch_rates(start, end, stored_dates=stored)
+	except BspError as exc:
+		frappe.throw(str(exc))
+	enabled = []
+	if frappe.db.table_exists("Currency"):
+		enabled = frappe.get_all(
+			"Currency",
+			filters={"enabled": 1},
+			pluck="name",
+			limit_page_length=0,
+		)
+	plan = plan_rates(
+		fetched["rates"],
+		existing,
+		enabled,
+		write_inverse=settings["write_inverse"],
+	)
+	result = {
+		"from_date": start,
+		"to_date": end,
+		"write_inverse": settings["write_inverse"],
+		"listed": fetched["listed"],
+		"fetched": fetched["fetched"],
+		"empty": fetched["empty"],
+		"skipped_dates": fetched["skipped"],
+		"missing_currencies": plan["missing_currencies"],
+		"counts": plan["counts"],
+		"rows": plan["rows"],
+		"created": 0,
+		"updated": 0,
+	}
+	if write:
+		result["created"], result["updated"] = _write_rates(plan["rows"])
+	return result
+
+
+def _existing_rates(start, end) -> list:
+	if not frappe.db.table_exists("Currency Exchange"):
+		return []
+	fields = ["name", "date", "from_currency", "to_currency", "exchange_rate"]
+	if frappe.get_meta("Currency Exchange").has_field("hero_bsp"):
+		fields.append("hero_bsp")
+	return frappe.get_all(
+		"Currency Exchange",
+		filters={"date": ["between", [start, end]]},
+		fields=fields,
+		limit_page_length=0,
+		ignore_permissions=True,
+	)
+
+
+def _write_rates(rows) -> tuple[int, int]:
+	created = 0
+	updated = 0
+	for row in rows:
+		if row["action"] == "create":
+			doc = frappe.get_doc(
+				{
+					"doctype": "Currency Exchange",
+					"date": row["date"],
+					"from_currency": row["from_currency"],
+					"to_currency": row["to_currency"],
+					"exchange_rate": row["exchange_rate"],
+					"for_buying": 1,
+					"for_selling": 1,
+					"hero_bsp": 1,
+				}
+			)
+			doc.flags.hero_bsp_sync = True
+			doc.insert(ignore_permissions=True)
+			created += 1
+		elif row["action"] == "update" and row.get("name"):
+			doc = frappe.get_doc("Currency Exchange", row["name"])
+			doc.exchange_rate = row["exchange_rate"]
+			doc.for_buying = 1
+			doc.for_selling = 1
+			doc.hero_bsp = 1
+			doc.flags.hero_bsp_sync = True
+			doc.save(ignore_permissions=True)
+			updated += 1
+	return created, updated
 
 
 def _batch_summary(doc, include_lines: bool) -> dict:
