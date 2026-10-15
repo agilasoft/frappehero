@@ -1,7 +1,7 @@
 app_name = "frappehero"
 app_title = "Frappe Hero"
 app_publisher = "Agilasoft"
-app_description = "Group users and the documents they may use, map accounts, and review access, defaults, shares, dimensions, tax, opening entries, and invoice disputes."
+app_description = "Group users and the documents they may use, map accounts, and review access, defaults, shares, dimensions, tax, opening entries, invoice disputes, and BSP exchange rates."
 app_email = "dev@agilasoft.com"
 app_license = "mit"
 
@@ -43,11 +43,18 @@ doc_events = {
 	"GL Entry": {
 		"validate": "frappehero.finance_desk.gl.apply_dimension_defaults",
 	},
+	"Currency Exchange": {
+		"validate": "frappehero.finance_desk.sync.lock_bsp_rate",
+	},
 }
 
 scheduler_events = {
-	"daily": ["frappehero.access_desk.tasks.daily"],
+	"daily": [
+		"frappehero.access_desk.tasks.daily",
+		"frappehero.finance_desk.tasks.daily_rates",
+	],
 }
 
 # Permission Studio writes User Permissions. The ownership fields are read-only
 # in the desk and are restored on validate unless the sync flag is set.
+# BSP rates do the same for the BSP Rate check on Currency Exchange.

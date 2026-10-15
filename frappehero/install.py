@@ -88,6 +88,26 @@ def get_custom_fields():
 				"in_standard_filter": 1,
 			},
 		],
+		"Currency Exchange": [
+			{
+				"fieldname": "hero_bsp_section",
+				"label": "Frappe Hero",
+				"fieldtype": "Section Break",
+				"insert_after": "for_selling",
+				"collapsible": 1,
+			},
+			{
+				"fieldname": "hero_bsp",
+				"label": "BSP Rate",
+				"fieldtype": "Check",
+				"insert_after": "hero_bsp_section",
+				"read_only": 1,
+				"no_copy": 1,
+				"default": "0",
+				"in_standard_filter": 1,
+				"description": "Set by Frappe Hero from the BSP reference bulletin. A rate entered by hand is left in place.",
+			},
+		],
 		"DocShare": [
 			{
 				"fieldname": "hero_expires_on",

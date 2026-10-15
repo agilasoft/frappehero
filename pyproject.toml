@@ -3,12 +3,13 @@ name = "frappehero"
 authors = [
     { name = "Agilasoft", email = "dev@agilasoft.com"}
 ]
-description = "Group users and the documents they may use, map accounts, and review access, defaults, shares, dimensions, tax, opening entries, and invoice disputes."
+description = "Group users and the documents they may use, map accounts, and review access, defaults, shares, dimensions, tax, opening entries, invoice disputes, and BSP exchange rates."
 requires-python = ">=3.10"
 readme = "README.md"
 dynamic = ["version"]
 dependencies = [
     # "frappe~=15.0.0" # Installed and managed by bench.
+    "pypdf>=5.0.0,<7",
 ]
 
 [build-system]
