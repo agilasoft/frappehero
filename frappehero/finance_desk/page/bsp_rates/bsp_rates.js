@@ -37,13 +37,15 @@ frappehero.BspRates = class BspRates {
 					<div class="fh-enabled"></div>
 					<div class="fh-inverse"></div>
 					<div class="fh-lookback"></div>
-					<button type="button" class="fh-btn" data-action="save">${__("Save")}</button>
+					<button type="button" class="fh-bsp-link" data-action="save">${__("Save")}</button>
 				</div>
 				<div class="fh-bsp-bar">
 					<div class="fh-from"></div>
 					<div class="fh-to"></div>
-					<button type="button" class="fh-btn" data-action="preview">${__("Preview")}</button>
-					<button type="button" class="fh-btn" data-action="apply">${__("Apply")}</button>
+					<div class="fh-bsp-actions">
+						<button type="button" class="fh-bsp-link" data-action="preview">${__("Preview")}</button>
+						<button type="button" class="fh-bsp-link" data-action="apply">${__("Apply")}</button>
+					</div>
 				</div>
 				<div class="fh-bsp-summary">
 					<div class="fh-stats"></div>
@@ -214,7 +216,7 @@ frappehero.BspRates = class BspRates {
 			]
 				.map(
 					([key, label]) =>
-						`<button type="button" class="fh-btn ${this.filter === key ? "fh-on" : ""}" data-action="filter" data-filter="${key}">${label}</button>`
+						`<button type="button" class="fh-bsp-tab ${this.filter === key ? "fh-on" : ""}" data-action="filter" data-filter="${key}">${label}</button>`
 				)
 				.join("")
 		);
