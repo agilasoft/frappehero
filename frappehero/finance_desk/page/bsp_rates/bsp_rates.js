@@ -28,25 +28,29 @@ frappehero.BspRates = class BspRates {
 		this.state = null;
 		this.applied = false;
 		this.datesReady = false;
+		this.filter = "all";
 		this.page.main.addClass("fh-page");
 		this.page.main.html(`
-			<div class="fh-app">
-				<p class="fh-muted">${__("Pesos per 1 unit of the foreign currency, from the BSP reference bulletin. USD uses the BSP reference rate. A rate entered by hand is left in place.")}</p>
-				<div class="fh-filters">
+			<div class="fh-app fh-bsp">
+				<p class="fh-bsp-lead">${__("Pesos per 1 unit of foreign currency. USD uses the BSP reference rate. A rate entered by hand stays as it is.")}</p>
+				<div class="fh-bsp-bar">
 					<div class="fh-enabled"></div>
 					<div class="fh-inverse"></div>
 					<div class="fh-lookback"></div>
-					<button type="button" class="fh-btn" data-action="save">${__("Save settings")}</button>
+					<button type="button" class="fh-btn" data-action="save">${__("Save")}</button>
 				</div>
-				<div class="fh-filters">
+				<div class="fh-bsp-bar">
 					<div class="fh-from"></div>
 					<div class="fh-to"></div>
 					<button type="button" class="fh-btn" data-action="preview">${__("Preview")}</button>
 					<button type="button" class="fh-btn" data-action="apply">${__("Apply")}</button>
 				</div>
-				<div class="fh-stats"></div>
-				<div class="fh-note fh-muted"></div>
-				<div class="fh-detail fh-rates fh-matrix-wrap"></div>
+				<div class="fh-bsp-summary">
+					<div class="fh-stats"></div>
+					<div class="fh-bsp-views"></div>
+				</div>
+				<p class="fh-bsp-note"></p>
+				<div class="fh-rates fh-matrix-wrap"></div>
 			</div>
 		`);
 		this.enabledControl = this.control(".fh-enabled", {
@@ -110,6 +114,9 @@ frappehero.BspRates = class BspRates {
 			this.preview();
 		} else if (action.dataset.action === "apply") {
 			this.confirmApply();
+		} else if (action.dataset.action === "filter") {
+			this.filter = action.dataset.filter || "all";
+			this.render();
 		}
 	}
 
@@ -181,19 +188,36 @@ frappehero.BspRates = class BspRates {
 
 	render() {
 		const state = this.state;
+		const stats = this.page.main.find(".fh-stats");
+		const note = this.page.main.find(".fh-bsp-note");
+		const views = this.page.main.find(".fh-bsp-views");
+		const table = this.page.main.find(".fh-rates");
 		if (!state) {
-			this.page.main.find(".fh-stats").empty();
-			this.page.main.find(".fh-note").text(__("Preview a date range to see the rates."));
-			this.page.main.find(".fh-rates").empty();
+			stats.empty();
+			views.empty();
+			note.text(__("Preview a date range to see the rates."));
+			table.empty();
 			return;
 		}
 		const counts = state.counts || {};
-		this.page.main.find(".fh-stats").html(`
+		stats.html(`
 			<div class="fh-stat"><b>${(state.listed || []).length}</b><span>${__("Bulletins")}</span></div>
 			<div class="fh-stat"><b>${counts.create || 0}</b><span>${__("Create")}</span></div>
 			<div class="fh-stat"><b>${counts.update || 0}</b><span>${__("Update")}</span></div>
 			<div class="fh-stat"><b>${counts.skip || 0}</b><span>${__("Leave as is")}</span></div>
 		`);
+		views.html(
+			[
+				["all", __("All")],
+				["write", __("To write")],
+				["skip", __("Left as is")],
+			]
+				.map(
+					([key, label]) =>
+						`<button type="button" class="fh-btn ${this.filter === key ? "fh-on" : ""}" data-action="filter" data-filter="${key}">${label}</button>`
+				)
+				.join("")
+		);
 		const notes = [];
 		if (this.applied) {
 			notes.push(__("Saved {0} new rates and updated {1}.", [state.created || 0, state.updated || 0]));
@@ -207,31 +231,42 @@ frappehero.BspRates = class BspRates {
 		if ((state.missing_currencies || []).length) {
 			notes.push(__("Not enabled in ERPNext: {0}.", [state.missing_currencies.join(", ")]));
 		}
-		this.page.main.find(".fh-note").text(notes.join(" "));
-		const rows = state.rows || [];
+		note.text(notes.join(" "));
+		const rows = (state.rows || []).filter((row) => {
+			if (this.filter === "write") {
+				return row.action === "create" || row.action === "update";
+			}
+			if (this.filter === "skip") {
+				return row.action === "skip";
+			}
+			return true;
+		});
 		if (!rows.length) {
-			this.page.main.find(".fh-rates").html(`<div class="fh-empty">${__("Nothing to write.")}</div>`);
+			table.html(`<div class="fh-empty">${__("Nothing to show.")}</div>`);
 			return;
 		}
+		const labels = { create: __("Create"), update: __("Update"), skip: __("Leave as is") };
 		const body = rows
 			.map(
 				(row) => `
 				<tr>
 					<td>${frappehero.esc(row.date)}</td>
 					<td>${frappehero.esc(row.from_currency)}</td>
+					<td class="fh-bsp-arrow" aria-hidden="true">→</td>
 					<td>${frappehero.esc(row.to_currency)}</td>
-					<td>${frappehero.esc(row.exchange_rate)}</td>
-					<td><span class="fh-pill">${frappehero.esc(row.action)}</span></td>
+					<td class="fh-bsp-rate">${frappehero.esc(this.formatRate(row.exchange_rate))}</td>
+					<td class="fh-bsp-action is-${frappehero.esc(row.action)}">${frappehero.esc(labels[row.action] || row.action)}</td>
 					<td class="fh-muted">${frappehero.esc(row.reason)}</td>
 				</tr>`
 			)
 			.join("");
-		this.page.main.find(".fh-rates").html(`
+		table.html(`
 			<table class="fh-matrix">
 				<thead>
 					<tr>
 						<th>${__("Date")}</th>
 						<th>${__("From")}</th>
+						<th></th>
 						<th>${__("To")}</th>
 						<th>${__("Rate")}</th>
 						<th>${__("Action")}</th>
@@ -241,5 +276,13 @@ frappehero.BspRates = class BspRates {
 				<tbody>${body}</tbody>
 			</table>
 		`);
+	}
+
+	formatRate(value) {
+		const number = Number(value);
+		if (!Number.isFinite(number)) {
+			return value == null ? "" : String(value);
+		}
+		return number.toLocaleString("en-US", { maximumFractionDigits: 9, useGrouping: false });
 	}
 };
