@@ -89,6 +89,10 @@ System Manager and Accounts Manager.
 
 **BSP Rates** reads the Bangko Sentral ng Pilipinas daily reference bulletin and writes Currency Exchange rows. The rate is pesos per one unit of the foreign currency. USD uses the BSP reference rate. Other currencies use the peso equivalent on the bulletin. SDR and metals are left out. A rate typed by hand for that date and pair stays as it is. **Write inverse** also stores PHP to the foreign currency, because ERPNext does not turn a pair around on its own. The daily job fills bulletins in the lookback window that are not already stored. Turn that job off on BSP Settings. Preview a range of up to 31 days, then apply it.
 
+**Cheque Leaf** is the set of cheque numbers for one company bank account. Set a range, with an optional prefix and zero-padding, paste extra numbers, or edit the rows. Saving adds the range to the set. **Rebuild available numbers** replaces the free numbers from that range. Spoil a spare number by marking it Cancelled. Assigned and used numbers stay put. One active leaf per bank account can be the default. **Cheque Leaf** on the Finance Desk shows how many numbers are still free.
+
+On **Mode of Payment**, tick **Uses Cheque Leaf**, or name the mode cheque or check. A Payment Entry with Payment Type **Pay** and that mode takes the next available number from the bank account's active leaf and writes it to Cheque/Reference No. When the reference date is still empty, the posting date is used. Saving a draft reserves the number. Submitting marks it used. Cancelling the payment voids that leaf, so the number is issued once. Deleting the draft puts the number back. **Assign Cheque Number** picks a specific free number. A bank account with no active leaf leaves the reference number to be typed by hand. Accounts User can pay with a leaf. Accounts Manager sets the leaves up.
+
 ## Dispute Desk
 
 System Manager and Accounts Manager.
@@ -105,7 +109,7 @@ On a site, an open ERPNext Dunning that names the invoice is marked Resolved. Dr
 
 ## Tests
 
-The rules for grants, conflicts, the account tree, role diffs, reviews, dimensions, tax inheritance, and opening journals run without a site:
+The rules for grants, conflicts, the account tree, role diffs, reviews, dimensions, tax inheritance, opening journals, and cheque leaves run without a site:
 
 ```bash
 python -m unittest discover -s frappehero -p "test_*.py"

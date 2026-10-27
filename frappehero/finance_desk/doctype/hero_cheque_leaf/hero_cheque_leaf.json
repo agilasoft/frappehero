@@ -1,0 +1,192 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "field:leaf_name",
+ "creation": "2026-10-27 00:00:00.000000",
+ "description": "A set of cheque numbers for one company bank account. Pay entries draw the next number from the active leaf.",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "leaf_name",
+  "bank_account",
+  "company",
+  "bank",
+  "column_break_main",
+  "status",
+  "is_default",
+  "section_range",
+  "prefix",
+  "padding",
+  "from_number",
+  "to_number",
+  "column_break_range",
+  "extra_numbers",
+  "replace_available",
+  "section_numbers",
+  "numbers"
+ ],
+ "fields": [
+  {
+   "fieldname": "leaf_name",
+   "fieldtype": "Data",
+   "label": "Leaf Name",
+   "reqd": 1,
+   "unique": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "bank_account",
+   "fieldtype": "Link",
+   "label": "Bank Account",
+   "options": "Bank Account",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "label": "Company",
+   "options": "Company",
+   "fetch_from": "bank_account.company",
+   "read_only": 1,
+   "in_standard_filter": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "bank",
+   "fieldtype": "Link",
+   "label": "Bank",
+   "options": "Bank",
+   "fetch_from": "bank_account.bank",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_main",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Draft\nActive\nClosed",
+   "default": "Draft",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "is_default",
+   "fieldtype": "Check",
+   "label": "Default for this bank account",
+   "default": "0",
+   "in_list_view": 1,
+   "description": "Pay entries use this set when the bank account has more than one active leaf. Closing the leaf clears the default."
+  },
+  {
+   "fieldname": "section_range",
+   "fieldtype": "Section Break",
+   "label": "Number set"
+  },
+  {
+   "fieldname": "prefix",
+   "fieldtype": "Data",
+   "label": "Prefix",
+   "description": "Printed before the number. Include a dash here if you want one, for example CHQ-."
+  },
+  {
+   "fieldname": "padding",
+   "fieldtype": "Int",
+   "label": "Padding",
+   "default": "0",
+   "description": "Zero-fill width. 6 turns 12 into 000012. 0 leaves the number as it is."
+  },
+  {
+   "fieldname": "from_number",
+   "fieldtype": "Int",
+   "label": "From Number",
+   "description": "First number in the range. Leave the range blank to type the set by hand."
+  },
+  {
+   "fieldname": "to_number",
+   "fieldtype": "Int",
+   "label": "To Number"
+  },
+  {
+   "fieldname": "column_break_range",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "extra_numbers",
+   "fieldtype": "Small Text",
+   "label": "Add numbers",
+   "description": "One cheque number per line. Saved onto the set, then cleared. Use this for numbers outside the range."
+  },
+  {
+   "fieldname": "replace_available",
+   "fieldtype": "Check",
+   "label": "Rebuild available numbers",
+   "default": "0",
+   "description": "On save, rebuild the available numbers from the range and the lines above. Assigned, used, and cancelled numbers stay."
+  },
+  {
+   "fieldname": "section_numbers",
+   "fieldtype": "Section Break",
+   "label": "Cheque numbers"
+  },
+  {
+   "fieldname": "numbers",
+   "fieldtype": "Table",
+   "label": "Cheque Numbers",
+   "options": "Hero Cheque Number",
+   "description": "The set used for this bank account. Mark a spare number Cancelled to spoil it. Assigned and used numbers stay on the leaf."
+  }
+ ],
+ "links": [],
+ "modified": "2026-10-27 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Finance Desk",
+ "name": "Hero Cheque Leaf",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Accounts Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Accounts User"
+  }
+ ],
+ "search_fields": "bank_account,company,status",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "leaf_name",
+ "track_changes": 1
+}
