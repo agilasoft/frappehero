@@ -87,6 +87,10 @@ System Manager and Accounts Manager.
 
 **Opening and Reclass Desk** pastes a trial balance. Lines match with the same rules as Account Mapper: one account number, otherwise one account name. An ambiguous number stays unmatched. The desk creates a draft Journal Entry when every line is matched and debit minus credit is about zero.
 
+**Invoice Creation Tool** is ERPNext's Opening Invoice Creation Tool. Finance Desk links it for System Manager, which is the role ERPNext grants on that screen. Invoice Type gains **Credit Note** and **Debit Note** beside Sales and Purchase. A credit note uploads as a return Sales Invoice. A debit note uploads as a return Purchase Invoice. Both stay opening entries, posted to the temporary opening account, with a negative quantity and a positive rate, so the party balance goes down. Enter the note amount as a positive Outstanding Amount. A negative amount in the file is accepted and still reduces the balance.
+
+**Against Invoice** is on the upload template for a credit note or a debit note. When that number is a submitted sales invoice (credit note) or purchase invoice (debit note) in the same company, the note is linked and reduces that invoice. Any other number is stored on the note, and the note keeps the balance itself. Choose the type, download the table template, fill it in, and upload it. Sales still uploads a Sales Invoice. Purchase still uploads a Purchase Invoice.
+
 **BSP Rates** reads the Bangko Sentral ng Pilipinas daily reference bulletin and writes Currency Exchange rows. The rate is pesos per one unit of the foreign currency. USD uses the BSP reference rate. Other currencies use the peso equivalent on the bulletin. SDR and metals are left out. A rate typed by hand for that date and pair stays as it is. **Write inverse** also stores PHP to the foreign currency, because ERPNext does not turn a pair around on its own. The daily job fills bulletins in the lookback window that are not already stored. Turn that job off on BSP Settings. Preview a range of up to 31 days, then apply it.
 
 **Cheque Leaf** is the set of cheque numbers for one company bank account. Set a range, with an optional prefix and zero-padding, paste extra numbers, or edit the rows. Saving adds the range to the set. **Rebuild available numbers** replaces the free numbers from that range. Spoil a spare number by marking it Cancelled. Assigned and used numbers stay put. One active leaf per bank account can be the default. **Cheque Leaf** on the Finance Desk shows how many numbers are still free.
@@ -109,7 +113,7 @@ On a site, an open ERPNext Dunning that names the invoice is marked Resolved. Dr
 
 ## Tests
 
-The rules for grants, conflicts, the account tree, role diffs, reviews, dimensions, tax inheritance, opening journals, and cheque leaves run without a site:
+The rules for grants, conflicts, the account tree, role diffs, reviews, dimensions, tax inheritance, opening journals, opening credit and debit notes, and cheque leaves run without a site:
 
 ```bash
 python -m unittest discover -s frappehero -p "test_*.py"

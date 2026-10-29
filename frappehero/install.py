@@ -15,7 +15,40 @@ def after_migrate():
 
 def ensure_custom_fields():
 	"""Mark rows Frappe Hero owns, without forking the standard DocTypes."""
-	create_custom_fields(get_custom_fields(), ignore_validate=True, update=True)
+	fields = get_custom_fields()
+	if not frappe.db.exists("DocType", "Opening Invoice Creation Tool Item"):
+		fields.pop("Opening Invoice Creation Tool Item", None)
+	create_custom_fields(fields, ignore_validate=True, update=True)
+	ensure_opening_invoice_extension()
+
+
+def ensure_opening_invoice_extension():
+	"""Add Credit Note and Debit Note to the Opening Invoice Creation Tool."""
+	if not frappe.db.exists("DocType", "Opening Invoice Creation Tool"):
+		return
+	from frappe.custom.doctype.property_setter.property_setter import make_property_setter
+
+	from frappehero.finance_desk.opening_invoice_logic import INVOICE_TYPE_OPTIONS
+
+	make_property_setter(
+		"Opening Invoice Creation Tool",
+		"invoice_type",
+		"options",
+		INVOICE_TYPE_OPTIONS,
+		"Text",
+		validate_fields_for_doctype=False,
+	)
+	if not frappe.db.exists("DocType", "Opening Invoice Creation Tool Item"):
+		return
+	if frappe.get_meta("Opening Invoice Creation Tool Item").has_field("supplier_invoice_date"):
+		make_property_setter(
+			"Opening Invoice Creation Tool Item",
+			"supplier_invoice_date",
+			"depends_on",
+			'eval: parent.invoice_type == "Purchase" || parent.invoice_type == "Debit Note"',
+			"Data",
+			validate_fields_for_doctype=False,
+		)
 
 
 def get_custom_fields():
@@ -161,6 +194,17 @@ def get_custom_fields():
 				"read_only": 1,
 				"no_copy": 1,
 				"depends_on": "eval:doc.payment_type=='Pay'",
+			},
+		],
+		"Opening Invoice Creation Tool Item": [
+			{
+				"fieldname": "hero_against_invoice",
+				"label": "Against Invoice",
+				"fieldtype": "Data",
+				"insert_after": "invoice_number",
+				"in_list_view": 1,
+				"depends_on": 'eval: parent.invoice_type == "Credit Note" || parent.invoice_type == "Debit Note"',
+				"description": "The sales invoice this credit note reduces, or the purchase invoice this debit note reduces. Leave this blank for a note that stands on its own. A submitted invoice in this company is linked. Any other number is stored on the note.",
 			},
 		],
 		"DocShare": [

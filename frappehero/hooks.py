@@ -1,7 +1,7 @@
 app_name = "frappehero"
 app_title = "Frappe Hero"
 app_publisher = "Agilasoft"
-app_description = "Group users and the documents they may use, map accounts, and review access, defaults, shares, dimensions, tax, opening entries, invoice disputes, BSP exchange rates, and cheque leaves."
+app_description = "Group users and the documents they may use, map accounts, and review access, defaults, shares, dimensions, tax, opening entries, credit notes, debit notes, invoice disputes, BSP exchange rates, and cheque leaves."
 app_email = "dev@agilasoft.com"
 app_license = "mit"
 
@@ -32,6 +32,13 @@ doctype_list_js = {
 doctype_js = {
 	"Sales Invoice": "public/js/sales_invoice_dispute.js",
 	"Payment Entry": "public/js/payment_entry_cheque.js",
+	"Opening Invoice Creation Tool": "public/js/opening_invoice_creation_tool.js",
+}
+
+# Credit Note uploads a return Sales Invoice. Debit Note uploads a return
+# Purchase Invoice. ERPNext's own class still builds Sales and Purchase.
+override_doctype_class = {
+	"Opening Invoice Creation Tool": "frappehero.finance_desk.opening_invoice.OpeningInvoiceCreationTool",
 }
 
 after_install = "frappehero.install.after_install"
@@ -68,3 +75,5 @@ scheduler_events = {
 # BSP rates do the same for the BSP Rate check on Currency Exchange.
 # Cheque Leaf reserves a number on Payment Entry before ERPNext asks for the
 # bank reference, then marks it used, void, or free as the payment moves.
+# Opening Invoice Creation Tool accepts a Credit Note upload as a return Sales
+# Invoice and a Debit Note upload as a return Purchase Invoice.
