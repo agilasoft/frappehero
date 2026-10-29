@@ -22,7 +22,16 @@ const DISPUTE_TAB_FIELDS = [
 
 frappe.ui.form.on("Sales Invoice", {
 	before_load(frm) {
-		separate_dispute_tab(frm);
+		const moved = dispute_section_is_in_the_header(frm);
+		if (moved) {
+			place_dispute_tab(frm);
+		}
+		const ordered = ordered_sales_invoice_fields(frm);
+		const hide = header_column_breaks_to_hide(ordered);
+		if (!moved && !hide.length) {
+			return;
+		}
+		remake_layout(frm, ordered, hide);
 	},
 
 	refresh(frm) {
@@ -60,14 +69,6 @@ frappe.ui.form.on("Sales Invoice", {
 		load_dispute_tab(frm);
 	},
 });
-
-function separate_dispute_tab(frm) {
-	if (!dispute_section_is_in_the_header(frm)) {
-		return;
-	}
-	place_dispute_tab(frm);
-	remake_layout(frm);
-}
 
 function dispute_section_is_in_the_header(frm) {
 	const map = frappe.meta.docfield_map["Sales Invoice"] || {};
@@ -193,10 +194,75 @@ function dispute_tab_field_order(fieldOrder) {
 	return rest.concat(body);
 }
 
-function remake_layout(frm) {
+function ordered_sales_invoice_fields(frm) {
+	const map = frappe.meta.docfield_map["Sales Invoice"] || {};
+	if (frm.doctype_layout && frm.doctype_layout.fields) {
+		return frm.doctype_layout.fields
+			.map((row) => map[row.fieldname])
+			.filter(Boolean);
+	}
+	if (!frappe.meta.sort_docfields) {
+		return [];
+	}
+	return frappe.meta.sort_docfields(map);
+}
+
+function header_column_breaks_to_hide(fields) {
+	const hiddenBreaks = [];
+	const visibleBreaks = [];
+	let started = false;
+	(fields || []).forEach((field) => {
+		if (!field || started === "done") {
+			return;
+		}
+		if (field.fieldname === "__newname") {
+			return;
+		}
+		const fieldtype = field.fieldtype || "";
+		if (fieldtype === "Tab Break") {
+			if (started) {
+				started = "done";
+			}
+			return;
+		}
+		if (fieldtype === "Section Break") {
+			if (started) {
+				started = "done";
+				return;
+			}
+			started = true;
+			return;
+		}
+		if (!fieldtype) {
+			return;
+		}
+		started = true;
+		if (fieldtype !== "Column Break" || !field.fieldname) {
+			return;
+		}
+		if (field_hidden(field)) {
+			hiddenBreaks.push(field.fieldname);
+		} else {
+			visibleBreaks.push(field.fieldname);
+		}
+	});
+	const extras = visibleBreaks.length > 2 ? visibleBreaks.slice(0, visibleBreaks.length - 2) : [];
+	return hiddenBreaks.concat(extras);
+}
+
+function field_hidden(df) {
+	return df.hidden === 1 || df.hidden === true || df.hidden === "1";
+}
+
+function remake_layout(frm, ordered, hide) {
 	if (!frm.layout || !frm.layout.make) {
 		return;
 	}
+	const omit = {};
+	(hide || []).forEach((name) => {
+		omit[name] = true;
+	});
+	const body = (ordered || []).filter((df) => df && !omit[df.fieldname]);
 	if (frm.layout.wrapper) {
 		frm.layout.wrapper.remove();
 	}
@@ -206,9 +272,18 @@ function remake_layout(frm) {
 	frm.layout.sections_dict = {};
 	frm.layout.fields_list = [];
 	frm.layout.fields_dict = {};
-	frm.layout.fields = null;
 	frm.layout.section = null;
 	frm.layout.column = null;
+	frm.layout.fields = [
+		{
+			fieldtype: "Data",
+			fieldname: "__newname",
+			reqd: 1,
+			hidden: 1,
+			label: __("Name"),
+			parent: "Sales Invoice",
+		},
+	].concat(body);
 	frm.layout.make();
 	frm.fields_dict = frm.layout.fields_dict;
 	frm.fields = frm.layout.fields_list;

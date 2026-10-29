@@ -304,6 +304,48 @@ def dispute_tab_field_order(field_order) -> list[str]:
 	return rest + body
 
 
+def header_column_breaks_to_hide(fields) -> list[str]:
+	"""Column breaks to drop so the Sales Invoice header is three columns.
+
+	``fields`` follows the form order. Each item has ``fieldname`` and
+	``fieldtype``. Hidden breaks are included so they do not leave an empty
+	column. Only the first section counts, so Items and the later sections keep
+	their columns. When that section has more than two visible column breaks,
+	the earliest extras are returned and the last two stay: customer, dates,
+	then the credit-note checks.
+	"""
+	hidden_breaks = []
+	visible_breaks = []
+	started = False
+	for field in fields or []:
+		if not isinstance(field, dict):
+			continue
+		fieldname = clean_text(field.get("fieldname"))
+		if fieldname == "__newname":
+			continue
+		fieldtype = clean_text(field.get("fieldtype"))
+		if fieldtype == "Tab Break":
+			if started:
+				break
+			continue
+		if fieldtype == "Section Break":
+			if started:
+				break
+			started = True
+			continue
+		if not fieldtype:
+			continue
+		started = True
+		if fieldtype != "Column Break" or not fieldname:
+			continue
+		if as_flag(field.get("hidden")):
+			hidden_breaks.append(fieldname)
+		else:
+			visible_breaks.append(fieldname)
+	extras = visible_breaks[:-2] if len(visible_breaks) > 2 else []
+	return hidden_breaks + extras
+
+
 def sales_invoice_dispute_tab(
 	customer,
 	company,
