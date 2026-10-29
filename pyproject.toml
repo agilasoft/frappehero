@@ -3,7 +3,7 @@ name = "frappehero"
 authors = [
     { name = "Agilasoft", email = "dev@agilasoft.com"}
 ]
-description = "Group users and the documents they may use, map accounts, and review access, defaults, shares, dimensions, tax, opening entries, invoice disputes, BSP exchange rates, and cheque leaves."
+description = "Group users and the documents they may use, map accounts, and review access, defaults, shares, dimensions, tax, opening entries, credit notes, debit notes, invoice disputes, BSP exchange rates, and cheque leaves."
 requires-python = ">=3.10"
 readme = "README.md"
 dynamic = ["version"]
