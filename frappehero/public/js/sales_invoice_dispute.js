@@ -35,6 +35,7 @@ frappe.ui.form.on("Sales Invoice", {
 	},
 
 	refresh(frm) {
+		organize_header_columns(frm);
 		load_dispute_tab(frm);
 		if (frm.doc.docstatus !== 1) {
 			return;
@@ -67,6 +68,11 @@ frappe.ui.form.on("Sales Invoice", {
 
 	return_against(frm) {
 		load_dispute_tab(frm);
+	},
+
+	onload_post_render(frm) {
+		organize_header_columns(frm);
+		setTimeout(() => organize_header_columns(frm), 0);
 	},
 });
 
@@ -207,47 +213,172 @@ function ordered_sales_invoice_fields(frm) {
 	return frappe.meta.sort_docfields(map);
 }
 
-function header_column_breaks_to_hide(fields) {
-	const hiddenBreaks = [];
-	const visibleBreaks = [];
-	let started = false;
+function header_section(fields) {
+	const sections = [];
+	let current = [];
 	(fields || []).forEach((field) => {
-		if (!field || started === "done") {
-			return;
-		}
-		if (field.fieldname === "__newname") {
+		if (!field || field.fieldname === "__newname") {
 			return;
 		}
 		const fieldtype = field.fieldtype || "";
-		if (fieldtype === "Tab Break") {
-			if (started) {
-				started = "done";
+		if (fieldtype === "Tab Break" || fieldtype === "Section Break") {
+			if (current.length) {
+				sections.push(current);
 			}
-			return;
-		}
-		if (fieldtype === "Section Break") {
-			if (started) {
-				started = "done";
-				return;
-			}
-			started = true;
+			current = [];
 			return;
 		}
 		if (!fieldtype) {
 			return;
 		}
-		started = true;
-		if (fieldtype !== "Column Break" || !field.fieldname) {
+		current.push(field);
+	});
+	if (current.length) {
+		sections.push(current);
+	}
+	const withCustomer = sections.find((section) =>
+		section.some((field) => field.fieldname === "customer")
+	);
+	if (withCustomer) {
+		return withCustomer;
+	}
+	return (
+		sections.find((section) => section.some((field) => field.fieldname === "title")) || []
+	);
+}
+
+function header_column_breaks_to_hide(fields) {
+	const section = header_section(fields);
+	const names = section.map((field) => field.fieldname || "");
+	const titleAt = names.indexOf("title");
+	const customerAt = names.indexOf("customer");
+	const hiddenBreaks = [];
+	const between = [];
+	const visibleBreaks = [];
+	section.forEach((field, index) => {
+		if ((field.fieldtype || "") !== "Column Break" || !field.fieldname) {
 			return;
 		}
 		if (field_hidden(field)) {
 			hiddenBreaks.push(field.fieldname);
-		} else {
-			visibleBreaks.push(field.fieldname);
+			return;
 		}
+		const splitsTitle =
+			titleAt >= 0 &&
+			customerAt >= 0 &&
+			Math.min(titleAt, customerAt) < index &&
+			index < Math.max(titleAt, customerAt);
+		if (splitsTitle) {
+			between.push(field.fieldname);
+			return;
+		}
+		visibleBreaks.push(field.fieldname);
 	});
 	const extras = visibleBreaks.length > 2 ? visibleBreaks.slice(0, visibleBreaks.length - 2) : [];
-	return hiddenBreaks.concat(extras);
+	const hide = [];
+	hiddenBreaks.concat(between, extras).forEach((name) => {
+		if (hide.indexOf(name) < 0) {
+			hide.push(name);
+		}
+	});
+	return hide;
+}
+
+// The header render can still leave Title in its own column when the column
+// break is not in the field list this script sees. Fold that column into
+// Customer so Details stays three columns: customer, dates, checks.
+function organize_header_columns(frm) {
+	if (!frm || !frm.get_field) {
+		return;
+	}
+	const customer = frm.get_field("customer");
+	const title = frm.get_field("title");
+	const section = (customer && customer.section) || (title && title.section);
+	if (!section || !section.body || !section.body.children) {
+		return;
+	}
+	let changed = false;
+	if (
+		customer &&
+		title &&
+		customer.$wrapper &&
+		title.$wrapper &&
+		customer.section === title.section
+	) {
+		const titleColumn = title.$wrapper.closest(".form-column");
+		const customerColumn = customer.$wrapper.closest(".form-column");
+		const columns = section.body.children(".form-column");
+		const stranded = title_column_is_stranded(titleColumn);
+		if (
+			titleColumn.length &&
+			customerColumn.length &&
+			titleColumn.get(0) !== customerColumn.get(0) &&
+			(columns.length > 3 || stranded)
+		) {
+			move_column_fields(titleColumn, customerColumn);
+			if (!titleColumn.find(".frappe-control").length) {
+				detach_column(section, titleColumn);
+			}
+			changed = true;
+		}
+	}
+	let columns = section.body.children(".form-column");
+	while (columns.length > 3) {
+		move_column_fields(columns.eq(0), columns.eq(1));
+		detach_column(section, columns.eq(0));
+		changed = true;
+		columns = section.body.children(".form-column");
+	}
+	if (changed) {
+		resize_section_columns(section);
+	}
+}
+
+function title_column_is_stranded(column) {
+	if (!column || !column.length) {
+		return false;
+	}
+	const names = [];
+	column.find(".frappe-control:not(.hide-control)").each(function () {
+		const name = $(this).attr("data-fieldname");
+		if (name) {
+			names.push(name);
+		}
+	});
+	return names.length === 1 && names[0] === "title";
+}
+
+function move_column_fields(fromColumn, toColumn) {
+	const dest = toColumn.children("form");
+	const nodes = fromColumn.children("form").children().get();
+	if (!nodes.length) {
+		return;
+	}
+	if (!dest.length) {
+		toColumn.append(nodes);
+		return;
+	}
+	if (dest.children().length) {
+		$(nodes).insertBefore(dest.children().eq(0));
+		return;
+	}
+	dest.append(nodes);
+}
+
+function detach_column(section, column) {
+	const node = column.get(0);
+	if (section.columns) {
+		section.columns = section.columns.filter((col) => !col.wrapper || col.wrapper.get(0) !== node);
+	}
+	column.remove();
+}
+
+function resize_section_columns(section) {
+	const columns = section.body.children(".form-column");
+	const span = Math.floor(12 / (columns.length || 1));
+	columns.each(function () {
+		this.className = "form-column col-sm-" + span;
+	});
 }
 
 function field_hidden(df) {

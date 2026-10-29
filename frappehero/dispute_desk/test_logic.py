@@ -374,6 +374,36 @@ class TestSalesInvoiceDisputeTab(unittest.TestCase):
 		hidden[3] = {"fieldname": "col_title", "fieldtype": "Column Break", "hidden": 1}
 		self.assertEqual(header_column_breaks_to_hide(hidden), ["col_title"])
 
+	def test_header_column_follows_the_customer_section(self):
+		fields = [
+			{"fieldname": "notes_section", "fieldtype": "Section Break"},
+			{"fieldname": "note", "fieldtype": "Data"},
+			{"fieldname": "note_col", "fieldtype": "Column Break"},
+			{"fieldname": "customer_section", "fieldtype": "Section Break"},
+			{"fieldname": "title", "fieldtype": "Data"},
+			{"fieldname": "col_title", "fieldtype": "Column Break"},
+			{"fieldname": "customer", "fieldtype": "Link"},
+			{"fieldname": "column_break1", "fieldtype": "Column Break"},
+			{"fieldname": "posting_date", "fieldtype": "Date"},
+			{"fieldname": "column_break_14", "fieldtype": "Column Break"},
+			{"fieldname": "is_return", "fieldtype": "Check"},
+			{"fieldname": "items_section", "fieldtype": "Section Break"},
+			{"fieldname": "items_col", "fieldtype": "Column Break"},
+		]
+		self.assertEqual(header_column_breaks_to_hide(fields), ["col_title"])
+
+	def test_title_split_is_removed_when_it_is_not_the_first_break(self):
+		fields = [
+			{"fieldname": "customer_section", "fieldtype": "Section Break"},
+			{"fieldname": "column_break_early", "fieldtype": "Column Break"},
+			{"fieldname": "title", "fieldtype": "Data"},
+			{"fieldname": "col_title", "fieldtype": "Column Break"},
+			{"fieldname": "customer", "fieldtype": "Link"},
+			{"fieldname": "column_break1", "fieldtype": "Column Break"},
+			{"fieldname": "posting_date", "fieldtype": "Date"},
+		]
+		self.assertEqual(header_column_breaks_to_hide(fields), ["col_title"])
+
 	def test_credit_position_and_credit_notes(self):
 		tab = sales_invoice_dispute_tab(
 			customer="Acme",
