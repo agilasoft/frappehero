@@ -12,6 +12,7 @@ from frappehero.dispute_desk.logic import (
 	close_dispute,
 	dispute_tab_field_order,
 	filter_disputes,
+	header_column_breaks_to_hide,
 	raise_dispute,
 	receivables_aging,
 	rows_for_desk,
@@ -346,6 +347,32 @@ class TestSalesInvoiceDisputeTab(unittest.TestCase):
 				"hero_holds_html",
 			],
 		)
+
+	def test_header_keeps_three_columns(self):
+		fields = [
+			{"fieldname": "__newname", "fieldtype": "Data", "hidden": 1},
+			{"fieldname": "customer_section", "fieldtype": "Section Break"},
+			{"fieldname": "title", "fieldtype": "Data"},
+			{"fieldname": "col_title", "fieldtype": "Column Break"},
+			{"fieldname": "customer", "fieldtype": "Link"},
+			{"fieldname": "company", "fieldtype": "Link"},
+			{"fieldname": "company_tax_id", "fieldtype": "Data"},
+			{"fieldname": "column_break1", "fieldtype": "Column Break"},
+			{"fieldname": "posting_date", "fieldtype": "Date"},
+			{"fieldname": "due_date", "fieldtype": "Date"},
+			{"fieldname": "column_break_14", "fieldtype": "Column Break"},
+			{"fieldname": "is_pos", "fieldtype": "Check"},
+			{"fieldname": "is_return", "fieldtype": "Check"},
+			{"fieldname": "accounting_dimensions_section", "fieldtype": "Section Break"},
+			{"fieldname": "cost_center", "fieldtype": "Link"},
+			{"fieldname": "dimension_col_break", "fieldtype": "Column Break"},
+		]
+		self.assertEqual(header_column_breaks_to_hide(fields), ["col_title"])
+		already_three = [row for row in fields if row["fieldname"] != "col_title"]
+		self.assertEqual(header_column_breaks_to_hide(already_three), [])
+		hidden = [dict(row) for row in fields]
+		hidden[3] = {"fieldname": "col_title", "fieldtype": "Column Break", "hidden": 1}
+		self.assertEqual(header_column_breaks_to_hide(hidden), ["col_title"])
 
 	def test_credit_position_and_credit_notes(self):
 		tab = sales_invoice_dispute_tab(
