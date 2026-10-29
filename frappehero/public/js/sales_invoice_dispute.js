@@ -6,7 +6,25 @@ const HOLD_STATE_LABELS = {
 	is_on_hold: "On hold",
 };
 
+// Same order as sales_invoice_dispute_fields(). The tab break comes first so
+// the fields under it are not part of Details.
+const DISPUTE_TAB_FIELDS = [
+	"hero_dispute_tab",
+	"hero_dispute_section",
+	"hero_dispute",
+	"hero_dispute_column",
+	"hero_dispute_status",
+	"hero_credit_section",
+	"hero_credit_html",
+	"hero_holds_section",
+	"hero_holds_html",
+];
+
 frappe.ui.form.on("Sales Invoice", {
+	before_load(frm) {
+		separate_dispute_tab(frm);
+	},
+
 	refresh(frm) {
 		load_dispute_tab(frm);
 		if (frm.doc.docstatus !== 1) {
@@ -42,6 +60,182 @@ frappe.ui.form.on("Sales Invoice", {
 		load_dispute_tab(frm);
 	},
 });
+
+function separate_dispute_tab(frm) {
+	if (!dispute_section_is_in_the_header(frm)) {
+		return;
+	}
+	place_dispute_tab(frm);
+	remake_layout(frm);
+}
+
+function dispute_section_is_in_the_header(frm) {
+	const map = frappe.meta.docfield_map["Sales Invoice"] || {};
+	const section = map.hero_dispute_section;
+	const dispute = map.hero_dispute;
+	if (!section && !dispute) {
+		return false;
+	}
+	const anchor = map.company || map.posting_date || map.is_return;
+	const tab = map.hero_dispute_tab;
+	if (!tab || tab.fieldtype !== "Tab Break") {
+		return true;
+	}
+	if (anchor && section && field_idx(section) < field_idx(anchor)) {
+		return true;
+	}
+	const layout = frm.doctype_layout;
+	if (layout && layout.fields) {
+		const names = layout.fields.map((row) => row.fieldname);
+		const sectionAt = names.indexOf("hero_dispute_section");
+		const companyAt = names.indexOf(anchor ? anchor.fieldname : "company");
+		if (sectionAt >= 0 && companyAt >= 0 && sectionAt < companyAt) {
+			return true;
+		}
+	}
+	return false;
+}
+
+function place_dispute_tab(frm) {
+	const map = frappe.meta.docfield_map["Sales Invoice"];
+	if (!map) {
+		return;
+	}
+	if (!map.hero_dispute_tab) {
+		map.hero_dispute_tab = {
+			doctype: "DocField",
+			parent: "Sales Invoice",
+			fieldname: "hero_dispute_tab",
+			fieldtype: "Tab Break",
+			label: __("Dispute"),
+			idx: 0,
+		};
+	}
+	map.hero_dispute_tab.fieldtype = "Tab Break";
+	map.hero_dispute_tab.label = __("Dispute");
+	if (map.hero_dispute_section) {
+		map.hero_dispute_section.fieldtype = "Section Break";
+		map.hero_dispute_section.collapsible = 0;
+	}
+	const skip = {};
+	DISPUTE_TAB_FIELDS.forEach((name) => {
+		skip[name] = true;
+	});
+	let maxIdx = 0;
+	Object.keys(map).forEach((name) => {
+		if (skip[name] || !map[name]) {
+			return;
+		}
+		const idx = field_idx(map[name]);
+		if (idx > maxIdx) {
+			maxIdx = idx;
+		}
+	});
+	let next = maxIdx + 1;
+	DISPUTE_TAB_FIELDS.forEach((name) => {
+		if (!map[name]) {
+			return;
+		}
+		map[name].idx = next;
+		next += 1;
+	});
+	reorder_doctype_layout(frm);
+}
+
+function reorder_doctype_layout(frm) {
+	const layout = frm.doctype_layout;
+	if (!layout || !layout.fields) {
+		return;
+	}
+	const rows = layout.fields.slice();
+	const names = rows.map((row) => row.fieldname);
+	if (names.indexOf("hero_dispute") < 0 && names.indexOf("hero_dispute_section") < 0) {
+		return;
+	}
+	if (names.indexOf("hero_dispute_tab") < 0) {
+		rows.push({ fieldname: "hero_dispute_tab", label: __("Dispute") });
+		names.push("hero_dispute_tab");
+	}
+	const byName = {};
+	rows.forEach((row) => {
+		byName[row.fieldname] = row;
+	});
+	layout.fields = dispute_tab_field_order(names)
+		.map((name) => byName[name])
+		.filter(Boolean);
+}
+
+function dispute_tab_field_order(fieldOrder) {
+	const dispute = {};
+	DISPUTE_TAB_FIELDS.forEach((name) => {
+		dispute[name] = true;
+	});
+	const incoming = [];
+	const present = {};
+	(fieldOrder || []).forEach((name) => {
+		if (!name) {
+			return;
+		}
+		incoming.push(name);
+		present[name] = true;
+	});
+	let hasBody = false;
+	DISPUTE_TAB_FIELDS.forEach((name) => {
+		if (name !== "hero_dispute_tab" && present[name]) {
+			hasBody = true;
+		}
+	});
+	if (!hasBody) {
+		return incoming;
+	}
+	const rest = incoming.filter((name) => !dispute[name]);
+	const body = DISPUTE_TAB_FIELDS.filter((name) => name === "hero_dispute_tab" || present[name]);
+	return rest.concat(body);
+}
+
+function remake_layout(frm) {
+	if (!frm.layout || !frm.layout.make) {
+		return;
+	}
+	if (frm.layout.wrapper) {
+		frm.layout.wrapper.remove();
+	}
+	frm.grids = [];
+	frm.layout.tabs = [];
+	frm.layout.sections = [];
+	frm.layout.sections_dict = {};
+	frm.layout.fields_list = [];
+	frm.layout.fields_dict = {};
+	frm.layout.fields = null;
+	frm.layout.section = null;
+	frm.layout.column = null;
+	frm.layout.make();
+	frm.fields_dict = frm.layout.fields_dict;
+	frm.fields = frm.layout.fields_list;
+
+	const dashboardParent = $('<div class="form-dashboard">');
+	let dashboardAdded = false;
+	if (frm.layout.tabs && frm.layout.tabs.length) {
+		frm.layout.tabs.every((tab) => {
+			if (tab.df && tab.df.show_dashboard) {
+				tab.wrapper.prepend(dashboardParent);
+				dashboardAdded = true;
+				return false;
+			}
+			return true;
+		});
+		if (!dashboardAdded) {
+			frm.layout.tabs[0].wrapper.prepend(dashboardParent);
+		}
+	} else if (frm.layout.wrapper) {
+		frm.layout.wrapper.find(".form-page").prepend(dashboardParent);
+	}
+	frm.dashboard = new frappe.ui.form.Dashboard(dashboardParent, frm);
+}
+
+function field_idx(df) {
+	return parseInt(df && df.idx, 10) || 0;
+}
 
 function raise_dispute(frm) {
 	frappe.prompt(
