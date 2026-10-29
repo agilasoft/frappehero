@@ -14,6 +14,8 @@ from frappehero.dispute_desk.logic import (
 	raise_dispute,
 	receivables_aging,
 	rows_for_desk,
+	sales_invoice_dispute_fields,
+	sales_invoice_dispute_tab,
 	statement_of_account,
 )
 
@@ -266,6 +268,165 @@ class TestDisputeFilters(unittest.TestCase):
 			self.assertIn("report.disputed_rows", html)
 			self.assertIn('row.section !== "Disputed Transactions"', script)
 			self.assertNotIn("Section", (root / name / f"{name}.py").read_text().split("def _summary")[0])
+
+
+class TestSalesInvoiceDisputeTab(unittest.TestCase):
+	def test_dispute_tab_stays_out_of_the_invoice_header(self):
+		fields = sales_invoice_dispute_fields()
+		by_name = {row["fieldname"]: row for row in fields}
+		names = [row["fieldname"] for row in fields]
+		self.assertEqual(len(names), len(set(names)))
+		self.assertEqual(by_name["hero_dispute_tab"]["fieldtype"], "Tab Break")
+		self.assertEqual(by_name["hero_dispute_tab"]["label"], "Dispute")
+		self.assertEqual(by_name["hero_dispute_tab"]["insert_after"], "connections_tab")
+		self.assertEqual(by_name["hero_dispute_section"]["fieldtype"], "Section Break")
+		self.assertEqual(by_name["hero_dispute_section"]["insert_after"], "hero_dispute_tab")
+		self.assertEqual(by_name["hero_dispute_section"].get("collapsible"), 0)
+		self.assertNotIn("customer", [row.get("insert_after") for row in fields])
+		self.assertEqual(by_name["hero_credit_section"]["label"], "Credit")
+		self.assertEqual(by_name["hero_holds_section"]["label"], "Holds")
+		self.assertEqual(by_name["hero_credit_html"]["fieldtype"], "HTML")
+		self.assertEqual(by_name["hero_holds_html"]["fieldtype"], "HTML")
+		self.assertLess(names.index("hero_dispute_tab"), names.index("hero_dispute_section"))
+		self.assertLess(names.index("hero_dispute_column"), names.index("hero_dispute_status"))
+		self.assertLess(names.index("hero_credit_section"), names.index("hero_holds_section"))
+		self.assertEqual(by_name["hero_dispute"]["options"], "Hero Dispute")
+		self.assertEqual(by_name["hero_dispute"]["read_only"], 1)
+
+	def test_credit_position_and_credit_notes(self):
+		tab = sales_invoice_dispute_tab(
+			customer="Acme",
+			company="Co",
+			currency="PHP",
+			credit_limit="1000",
+			outstanding=250,
+			bypass_credit_limit_check=1,
+			is_return=1,
+			return_against="SINV-1",
+			credit_notes=[
+				{
+					"name": "SINV-RET-2",
+					"posting_date": "2026-04-02",
+					"grand_total": -40,
+					"outstanding_amount": 0,
+					"currency": "PHP",
+				},
+				{"name": " ", "grand_total": 5},
+				{
+					"name": "SINV-RET-1",
+					"posting_date": "2026-04-01",
+					"grand_total": -15.5,
+					"outstanding": 0,
+					"currency": "",
+				},
+			],
+			holds=[],
+			sales_invoice="SINV-9",
+		)
+		self.assertEqual(tab["customer_known"], 1)
+		self.assertEqual(tab["company_known"], 1)
+		self.assertEqual(tab["limit_set"], 1)
+		self.assertEqual(tab["credit_limit"], 1000)
+		self.assertEqual(tab["outstanding"], 250)
+		self.assertEqual(tab["available"], 750)
+		self.assertEqual(tab["bypass_credit_limit_check"], 1)
+		self.assertEqual(tab["is_return"], 1)
+		self.assertEqual(tab["return_against"], "SINV-1")
+		self.assertEqual(
+			[row["name"] for row in tab["credit_notes"]],
+			["SINV-RET-1", "SINV-RET-2"],
+		)
+		self.assertEqual(tab["credit_notes"][0]["currency"], "PHP")
+		self.assertEqual(tab["credit_notes"][0]["outstanding"], 0)
+		self.assertEqual(tab["credit_notes"][0]["grand_total"], -15.5)
+		self.assertEqual(tab["holds"], [])
+
+	def test_missing_limit_leaves_available_empty(self):
+		tab = sales_invoice_dispute_tab(
+			customer="Acme",
+			company="Co",
+			currency="PHP",
+			credit_limit=0,
+			outstanding=80,
+			bypass_credit_limit_check=0,
+			is_return=0,
+			return_against="",
+			credit_notes=None,
+			holds=None,
+		)
+		self.assertEqual(tab["limit_set"], 0)
+		self.assertIsNone(tab["credit_limit"])
+		self.assertIsNone(tab["available"])
+		self.assertEqual(tab["outstanding"], 80)
+		self.assertEqual(tab["credit_notes"], [])
+		over = sales_invoice_dispute_tab(
+			customer="Acme",
+			company="",
+			currency="PHP",
+			credit_limit=100,
+			outstanding=150,
+			bypass_credit_limit_check=0,
+			is_return=0,
+			return_against=None,
+			credit_notes=[],
+			holds=[],
+		)
+		self.assertEqual(over["company_known"], 0)
+		self.assertEqual(over["available"], -50)
+
+	def test_holds_keep_active_and_released_only(self):
+		tab = sales_invoice_dispute_tab(
+			customer="",
+			company="Co",
+			currency="",
+			credit_limit=None,
+			outstanding=None,
+			bypass_credit_limit_check=0,
+			is_return=0,
+			return_against=None,
+			credit_notes=[],
+			sales_invoice="SINV-1",
+			holds=[
+				{"fieldname": "on_hold", "active": 1, "source_name": "SINV-1"},
+				{
+					"kind": "Hold",
+					"source_doctype": "Sales Invoice",
+					"source_name": "SINV-1",
+					"state": "on_hold",
+					"active": 0,
+					"dispute": "DISP-1",
+				},
+				{"fieldname": "is_on_hold", "active": 0, "source_name": "SINV-1"},
+				{
+					"kind": "Collection",
+					"source_doctype": "Hero Invoice Action",
+					"source_name": "ACT-C",
+					"state": "Active",
+					"active": 1,
+				},
+				{
+					"kind": "On Hold",
+					"source_doctype": "Hero Invoice Action",
+					"source_name": "ACT-H",
+					"state": "Released",
+					"active": 0,
+					"dispute": "DISP-1",
+				},
+				{
+					"action_kind": "Dunning",
+					"source_doctype": "Dunning",
+					"source_name": "DUN-1",
+					"previous_state": "Unresolved",
+					"active": 0,
+				},
+			],
+		)
+		self.assertEqual(tab["customer_known"], 0)
+		self.assertEqual(tab["outstanding"], 0)
+		self.assertEqual(
+			[(row["source_name"], row["state"], row["active"], row["dispute"]) for row in tab["holds"]],
+			[("SINV-1", "on_hold", 1, "DISP-1"), ("ACT-H", "Released", 0, "DISP-1")],
+		)
 
 
 def _invoice(name, posting_date, due_date, outstanding, customer="Acme", company="Co"):

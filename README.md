@@ -103,6 +103,8 @@ System Manager and Accounts Manager.
 
 A dispute always points at one sales invoice. The document that raised it can be that invoice, or a record from logistics, ERPNext, or another app. **Dispute Desk** asks for the source DocType, the source document, and the invoice. Sales Invoice has **Raise Dispute** under the Dispute menu. Other modules call `frappehero.dispute_desk.api.raise_dispute`.
 
+On Sales Invoice, dispute, credit, and holds sit on a **Dispute** tab, after Connections. The invoice header stays as ERPNext draws it. **Credit** shows the customer credit limit for the company, the outstanding balance, and credit notes raised against the invoice. A credit note invoice also shows the invoice it was raised against. **Holds** lists an invoice hold (`on_hold` or `is_on_hold`) and any Hold action, including a hold this dispute has already released. When nothing is on hold, the tab says so.
+
 Opening the dispute releases every active action on that invoice. Hold, Collection, and Dunning are the usual kinds. A module can register any other kind on **Hero Invoice Action** with `register_invoice_action`. Released actions stay released after the dispute is resolved or cancelled. A second open dispute for the same invoice is rejected.
 
 **Dispute Desk** filters by company, customer, sales invoice, status, dispute date, and a search across the invoice, customer, source, and reason.

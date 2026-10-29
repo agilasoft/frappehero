@@ -7,6 +7,10 @@ Opening a dispute releases every active action on that sales invoice.
 Hold, Collection, and Dunning are the usual kinds. Any other kind is
 released as well. Closing the dispute does not put those actions back.
 
+The Sales Invoice form keeps that dispute on its own tab, with the customer
+credit position and any holds. The tab is not a section inside the invoice
+header.
+
 Statement of Account and Receivables Aging leave an open dispute out of the
 amount due and the aging buckets. The table is only the invoices still due.
 Disputed Transactions is a section on the printout.
@@ -197,6 +201,206 @@ def invoice_link_for(disputes, sales_invoice) -> dict:
 		"hero_dispute": clean_text(open_rows[0].get("name")) or None,
 		"hero_dispute_status": "Open",
 	}
+
+
+def sales_invoice_dispute_fields() -> list[dict]:
+	"""Custom fields for the Sales Invoice Dispute tab.
+
+	The tab is anchored after Connections. A section inserted after Customer
+	would sit in the invoice header and pull Company, the posting dates, and
+	the credit-note checks into that section.
+	"""
+	return [
+		{
+			"fieldname": "hero_dispute_tab",
+			"label": "Dispute",
+			"fieldtype": "Tab Break",
+			"insert_after": "connections_tab",
+		},
+		{
+			"fieldname": "hero_dispute_section",
+			"label": "Dispute",
+			"fieldtype": "Section Break",
+			"insert_after": "hero_dispute_tab",
+			"collapsible": 0,
+		},
+		{
+			"fieldname": "hero_dispute",
+			"label": "Dispute",
+			"fieldtype": "Link",
+			"options": "Hero Dispute",
+			"insert_after": "hero_dispute_section",
+			"read_only": 1,
+			"no_copy": 1,
+			"in_standard_filter": 1,
+			"description": "The open dispute for this invoice. Statement of Account and Receivables Aging list it under Disputed Transactions.",
+		},
+		{
+			"fieldname": "hero_dispute_column",
+			"fieldtype": "Column Break",
+			"insert_after": "hero_dispute",
+		},
+		{
+			"fieldname": "hero_dispute_status",
+			"label": "Dispute Status",
+			"fieldtype": "Data",
+			"insert_after": "hero_dispute_column",
+			"read_only": 1,
+			"no_copy": 1,
+			"in_standard_filter": 1,
+		},
+		{
+			"fieldname": "hero_credit_section",
+			"label": "Credit",
+			"fieldtype": "Section Break",
+			"insert_after": "hero_dispute_status",
+			"collapsible": 0,
+			"description": "Customer credit limit for this company, the outstanding balance, and credit notes raised against this invoice.",
+		},
+		{
+			"fieldname": "hero_credit_html",
+			"fieldtype": "HTML",
+			"insert_after": "hero_credit_section",
+			"print_hide": 1,
+		},
+		{
+			"fieldname": "hero_holds_section",
+			"label": "Holds",
+			"fieldtype": "Section Break",
+			"insert_after": "hero_credit_html",
+			"collapsible": 0,
+			"description": "Invoice holds and Hold actions. Opening a dispute releases them.",
+		},
+		{
+			"fieldname": "hero_holds_html",
+			"fieldtype": "HTML",
+			"insert_after": "hero_holds_section",
+			"print_hide": 1,
+		},
+	]
+
+
+def sales_invoice_dispute_tab(
+	customer,
+	company,
+	currency,
+	credit_limit,
+	outstanding,
+	bypass_credit_limit_check,
+	is_return,
+	return_against,
+	credit_notes,
+	holds,
+	sales_invoice=None,
+) -> dict:
+	"""Credit position and holds for the Sales Invoice Dispute tab.
+
+	``credit_limit`` is None when this company has no limit. Zero is the same
+	as no limit. ``holds`` may mix invoice flags, invoice actions, and dispute
+	releases. Only holds are returned. An active hold wins over a released
+	copy of the same source and state.
+	"""
+	limit_set = 0
+	limit = _money(credit_limit)
+	if limit is not None and limit > 0:
+		limit_set = 1
+	else:
+		limit = None
+	balance = _money(outstanding)
+	if balance is None:
+		balance = 0.0
+	available = round(limit - balance, 2) if limit_set else None
+	notes = []
+	company_currency = clean_text(currency)
+	for note in credit_notes or []:
+		name = clean_text(note.get("name"))
+		if not name:
+			continue
+		note_currency = clean_text(note.get("currency")) or company_currency
+		note_outstanding = note.get("outstanding")
+		if note_outstanding is None or note_outstanding == "":
+			note_outstanding = note.get("outstanding_amount")
+		notes.append(
+			{
+				"name": name,
+				"posting_date": _date_text(note.get("posting_date")),
+				"grand_total": _money(note.get("grand_total")) or 0.0,
+				"outstanding": _money(note_outstanding) or 0.0,
+				"currency": note_currency,
+			}
+		)
+	notes.sort(key=lambda row: (row.get("posting_date") or "", row["name"]))
+	return {
+		"customer_known": 1 if clean_text(customer) else 0,
+		"company_known": 1 if clean_text(company) else 0,
+		"currency": company_currency,
+		"limit_set": limit_set,
+		"credit_limit": limit,
+		"outstanding": balance,
+		"available": available,
+		"bypass_credit_limit_check": as_flag(bypass_credit_limit_check),
+		"is_return": as_flag(is_return),
+		"return_against": clean_text(return_against) or None,
+		"credit_notes": notes,
+		"holds": _holds_for_tab(holds, sales_invoice),
+	}
+
+
+def _holds_for_tab(holds, sales_invoice) -> list[dict]:
+	invoice = clean_text(sales_invoice)
+	kept = {}
+	for source in holds or []:
+		row = _hold_for_tab(source, invoice)
+		if not row:
+			continue
+		key = (row["source_doctype"], row["source_name"], row["state"])
+		current = kept.get(key)
+		if current and current["active"] and not row["active"]:
+			if not current["dispute"] and row["dispute"]:
+				current["dispute"] = row["dispute"]
+			continue
+		if current and not row["dispute"]:
+			row["dispute"] = current["dispute"]
+		kept[key] = row
+	rows = list(kept.values())
+	rows.sort(key=lambda row: (0 if row["active"] else 1, row["source_doctype"], row["source_name"], row["state"]))
+	return rows
+
+
+def _hold_for_tab(row, sales_invoice) -> dict | None:
+	fieldname = clean_text(row.get("fieldname"))
+	kind = clean_text(row.get("kind") or row.get("action_kind"))
+	dispute = clean_text(row.get("dispute")) or None
+	if fieldname in HOLD_FIELDS:
+		if not as_flag(row.get("active")):
+			return None
+		return {
+			"source_doctype": "Sales Invoice",
+			"source_name": clean_text(row.get("source_name") or sales_invoice),
+			"state": fieldname,
+			"active": 1,
+			"dispute": dispute,
+		}
+	if not _is_hold_kind(kind):
+		return None
+	return {
+		"source_doctype": clean_text(row.get("source_doctype")) or "Hero Invoice Action",
+		"source_name": clean_text(row.get("source_name") or row.get("name")),
+		"state": clean_text(row.get("state") or row.get("previous_state")),
+		"active": as_flag(row.get("active")),
+		"dispute": dispute,
+	}
+
+
+def _is_hold_kind(kind) -> bool:
+	text = clean_text(kind).casefold().replace("_", " ")
+	return text in {"hold", "on hold"}
+
+
+def _money(value):
+	if value is None or value == "":
+		return None
+	return round(float(value), 2)
 
 
 def statement_of_account(rows, disputes, customer=None, company=None, from_date=None, to_date=None) -> dict:

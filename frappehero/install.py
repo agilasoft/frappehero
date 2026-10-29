@@ -4,6 +4,8 @@
 import frappe
 from frappe.custom.doctype.custom_field.custom_field import create_custom_fields
 
+from frappehero.dispute_desk.logic import sales_invoice_dispute_fields
+
 
 def after_install():
 	ensure_custom_fields()
@@ -92,35 +94,7 @@ def get_custom_fields():
 				"description": "Every permission group that grants this same user, DocType, and value.",
 			},
 		],
-		"Sales Invoice": [
-			{
-				"fieldname": "hero_dispute_section",
-				"label": "Dispute",
-				"fieldtype": "Section Break",
-				"insert_after": "customer",
-				"collapsible": 1,
-			},
-			{
-				"fieldname": "hero_dispute",
-				"label": "Dispute",
-				"fieldtype": "Link",
-				"options": "Hero Dispute",
-				"insert_after": "hero_dispute_section",
-				"read_only": 1,
-				"no_copy": 1,
-				"in_standard_filter": 1,
-				"description": "The open dispute for this invoice. Statement of Account and Receivables Aging list it under Disputed Transactions.",
-			},
-			{
-				"fieldname": "hero_dispute_status",
-				"label": "Dispute Status",
-				"fieldtype": "Data",
-				"insert_after": "hero_dispute",
-				"read_only": 1,
-				"no_copy": 1,
-				"in_standard_filter": 1,
-			},
-		],
+		"Sales Invoice": sales_invoice_dispute_fields(),
 		"Currency Exchange": [
 			{
 				"fieldname": "hero_bsp_section",
