@@ -98,7 +98,13 @@ def ensure_sales_invoice_dispute_tab():
 		updated = dispute_tab_field_order(cleaned + [name for name in present if name not in cleaned])
 		if updated == cleaned:
 			continue
-		frappe.db.set_value("Property Setter", row.name, "value", json.dumps(updated), update_modified=False)
+		frappe.db.set_value(
+			"Property Setter",
+			row.name,
+			"value",
+			json.dumps(updated),
+			update_modified=False,
+		)
 		changed = True
 	if changed:
 		frappe.clear_cache(doctype="Sales Invoice")
