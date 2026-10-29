@@ -143,8 +143,9 @@ MODULE_IDEAS = [
 		),
 		"shape": (
 			"Record the source document and the sales invoice. Opening the dispute releases "
-			"every active hold, collection, dunning, or other action. Statement of Account and "
-			"Receivables Aging keep the invoice under Disputed Transactions until the dispute is closed."
+			"every active hold, collection, dunning, or other action. The sales invoice keeps "
+			"the dispute, the customer credit position, and any holds on a Dispute tab. "
+			"Statement of Account and Receivables Aging keep the invoice under Disputed Transactions until the dispute is closed."
 		),
 		"builds_on": "The same desk pattern as Finance Desk: rules that can be tested without a site, and a page that applies them.",
 	},

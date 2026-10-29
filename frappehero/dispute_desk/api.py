@@ -2,8 +2,10 @@
 # For license information, please see license.txt
 
 import frappe
+from frappe import _
 from frappe.utils import today
 
+from frappehero.dispute_desk.apply import load_invoice_dispute_tab
 from frappehero.dispute_desk.logic import filter_disputes, receivables_aging, statement_of_account
 from frappehero.flags import clean_text
 
@@ -116,6 +118,26 @@ def _dispute_filters(company, customer, status, sales_invoice, from_date, to_dat
 	elif end:
 		filters["dispute_date"] = ["<=", end]
 	return filters
+
+
+@frappe.whitelist()
+def invoice_dispute_tab(
+	sales_invoice: str | None = None,
+	customer: str | None = None,
+	company: str | None = None,
+	is_return: str | None = None,
+	return_against: str | None = None,
+) -> dict:
+	"""Credit limit, credit notes, and holds for the Sales Invoice Dispute tab."""
+	if not frappe.has_permission("Sales Invoice", "read"):
+		frappe.throw(_("Not permitted."), frappe.PermissionError)
+	return load_invoice_dispute_tab(
+		sales_invoice=sales_invoice,
+		customer=customer,
+		company=company,
+		is_return=is_return,
+		return_against=return_against,
+	)
 
 
 @frappe.whitelist()
