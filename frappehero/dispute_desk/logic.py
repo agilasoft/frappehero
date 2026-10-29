@@ -280,6 +280,30 @@ def sales_invoice_dispute_fields() -> list[dict]:
 	]
 
 
+def dispute_tab_fieldnames() -> tuple[str, ...]:
+	return tuple(row["fieldname"] for row in sales_invoice_dispute_fields())
+
+
+def dispute_tab_field_order(field_order) -> list[str]:
+	"""Put the dispute fields on a tab at the end of a Sales Invoice field order.
+
+	Customize Form can save a field order that leaves the Dispute section in
+	the invoice header, between the customer and Company. Those fields are
+	removed from the middle. Company, the posting dates, and the credit-note
+	checks keep their relative order. The Dispute tab and its fields are appended.
+	"""
+	names = dispute_tab_fieldnames()
+	tab = "hero_dispute_tab"
+	dispute = set(names)
+	incoming = [clean_text(name) for name in field_order or [] if clean_text(name)]
+	present = set(incoming)
+	if not (present & (dispute - {tab})):
+		return incoming
+	rest = [name for name in incoming if name not in dispute]
+	body = [name for name in names if name == tab or name in present]
+	return rest + body
+
+
 def sales_invoice_dispute_tab(
 	customer,
 	company,

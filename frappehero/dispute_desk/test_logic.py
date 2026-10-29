@@ -10,6 +10,7 @@ from frappehero.dispute_desk.logic import (
 	DisputeError,
 	aging_bucket,
 	close_dispute,
+	dispute_tab_field_order,
 	filter_disputes,
 	raise_dispute,
 	receivables_aging,
@@ -292,6 +293,59 @@ class TestSalesInvoiceDisputeTab(unittest.TestCase):
 		self.assertLess(names.index("hero_credit_section"), names.index("hero_holds_section"))
 		self.assertEqual(by_name["hero_dispute"]["options"], "Hero Dispute")
 		self.assertEqual(by_name["hero_dispute"]["read_only"], 1)
+
+	def test_saved_field_order_lifts_the_dispute_section_out_of_the_header(self):
+		order = [
+			"title",
+			"customer",
+			"customer_name",
+			"tax_id",
+			"hero_dispute_section",
+			"hero_dispute",
+			"hero_dispute_status",
+			"company",
+			"posting_date",
+			"is_return",
+			"is_debit_note",
+			"connections_tab",
+			"logistics_tab",
+		]
+		result = dispute_tab_field_order(order)
+		self.assertEqual(
+			result,
+			[
+				"title",
+				"customer",
+				"customer_name",
+				"tax_id",
+				"company",
+				"posting_date",
+				"is_return",
+				"is_debit_note",
+				"connections_tab",
+				"logistics_tab",
+				"hero_dispute_tab",
+				"hero_dispute_section",
+				"hero_dispute",
+				"hero_dispute_status",
+			],
+		)
+		self.assertLess(result.index("tax_id"), result.index("company"))
+		self.assertLess(result.index("company"), result.index("hero_dispute_tab"))
+		self.assertEqual(dispute_tab_field_order(result), result)
+		self.assertEqual(dispute_tab_field_order(["customer", "company"]), ["customer", "company"])
+		with_credit = dispute_tab_field_order(order + ["hero_credit_section", "hero_holds_html"])
+		self.assertEqual(
+			with_credit[with_credit.index("hero_dispute_tab") :],
+			[
+				"hero_dispute_tab",
+				"hero_dispute_section",
+				"hero_dispute",
+				"hero_dispute_status",
+				"hero_credit_section",
+				"hero_holds_html",
+			],
+		)
 
 	def test_credit_position_and_credit_notes(self):
 		tab = sales_invoice_dispute_tab(
