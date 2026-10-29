@@ -137,7 +137,7 @@ def apply_note(invoice, kind, against, linked) -> dict:
 		return invoice
 	items = []
 	for item in invoice.get("items") or []:
-		rewritten = dict(item)
+		rewritten = _clone(item)
 		qty, rate = return_line(rewritten.get("qty"), rewritten.get("rate"))
 		rewritten["qty"] = qty
 		rewritten["rate"] = rate
@@ -145,7 +145,9 @@ def apply_note(invoice, kind, against, linked) -> dict:
 		rewritten["item_name"] = title
 		rewritten["description"] = retitle(rewritten.get("description"), kind["item_name"])
 		items.append(rewritten)
-	stamped = dict(invoice)
+	# Keep frappe._dict. dict() drops attribute access, and the importer reads
+	# invoice.invoice_number before it builds the document.
+	stamped = _clone(invoice)
 	stamped["items"] = items
 	stamped["doctype"] = kind["doctype"]
 	stamped["is_return"] = 1
@@ -160,6 +162,21 @@ def apply_note(invoice, kind, against, linked) -> dict:
 		remarks = clean_text(stamped.get("remarks"))
 		stamped["remarks"] = f"{remarks} {note}".strip() if remarks else note
 	return stamped
+
+
+def _clone(mapping):
+	"""Copy a mapping and keep its type.
+
+	``dict(value)`` and ``dict.copy`` both return a plain dict. ERPNext's
+	opening-invoice importer then fails on ``invoice.invoice_number``.
+	"""
+	kind = type(mapping)
+	if kind is dict:
+		return dict(mapping)
+	try:
+		return kind(mapping)
+	except (TypeError, ValueError):
+		return dict(mapping)
 
 
 def _number(value) -> float:

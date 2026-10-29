@@ -44,7 +44,7 @@ class OpeningInvoiceCreationTool(_base_class()):
 			return invoice
 		against = clean_text(row.get("hero_against_invoice") if row is not None else "")
 		linked = _against_is_submitted(kind["doctype"], against, self.company)
-		return apply_note(invoice, kind, against, linked)
+		return _as_attribute_dict(apply_note(invoice, kind, against, linked))
 
 	def _kind(self) -> dict:
 		try:
@@ -59,6 +59,21 @@ class OpeningInvoiceCreationTool(_base_class()):
 			return call()
 		finally:
 			self.invoice_type = original
+
+
+def _as_attribute_dict(invoice):
+	"""The importer reads attributes, so the invoice cannot be a plain dict."""
+	if invoice is None:
+		return invoice
+	if not isinstance(invoice, frappe._dict):
+		invoice = frappe._dict(invoice)
+	items = []
+	for item in invoice.get("items") or []:
+		items.append(item if isinstance(item, frappe._dict) else frappe._dict(item))
+	invoice["items"] = items
+	if "invoice_number" not in invoice:
+		invoice["invoice_number"] = None
+	return invoice
 
 
 def _against_is_submitted(doctype, name, company) -> bool:

@@ -15,6 +15,16 @@ from frappehero.finance_desk.opening_invoice_logic import (
 )
 
 
+class _AttrDict(dict):
+	"""Stand-in for frappe._dict: fields are read as attributes."""
+
+	def __getattr__(self, key):
+		try:
+			return self[key]
+		except KeyError as exc:
+			raise AttributeError(key) from exc
+
+
 def _invoice(qty=1, rate=25, item_name="Opening Invoice Item", description=None):
 	return {
 		"doctype": "Purchase Invoice",
@@ -119,6 +129,28 @@ class TestApplyNote(unittest.TestCase):
 		)
 		self.assertEqual(stamped["items"][0]["description"], "Opening Credit Note Original Quantity: 2.5")
 		self.assertNotIn("remarks", stamped)
+
+	def test_attribute_access_survives_for_the_importer(self):
+		source = _AttrDict(
+			doctype="Purchase Invoice",
+			invoice_number=None,
+			items=[
+				_AttrDict(
+					qty=1,
+					rate=10000,
+					item_name="Opening Credit Note",
+					description="Opening Credit Note",
+				)
+			],
+		)
+		stamped = apply_note(source, invoice_kind("Credit Note"), "", linked=False)
+		self.assertIsInstance(stamped, _AttrDict)
+		self.assertIsInstance(stamped["items"][0], _AttrDict)
+		self.assertIsNone(stamped.invoice_number)
+		self.assertEqual(stamped.doctype, "Sales Invoice")
+		self.assertEqual(stamped["items"][0].qty, -1.0)
+		self.assertEqual(stamped["items"][0].rate, 10000.0)
+		self.assertEqual(source["items"][0]["qty"], 1)
 
 	def test_sales_upload_is_left_alone(self):
 		source = _invoice()
