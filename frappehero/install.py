@@ -1,10 +1,17 @@
 # Copyright (c) 2026, Agilasoft and contributors
 # For license information, please see license.txt
 
+import json
+
 import frappe
 from frappe.custom.doctype.custom_field.custom_field import create_custom_fields
 
-from frappehero.dispute_desk.logic import sales_invoice_dispute_fields
+from frappehero.dispute_desk.logic import (
+	dispute_tab_field_order,
+	dispute_tab_fieldnames,
+	sales_invoice_dispute_fields,
+)
+from frappehero.flags import clean_text
 
 
 def after_install():
@@ -22,6 +29,7 @@ def ensure_custom_fields():
 		fields.pop("Opening Invoice Creation Tool Item", None)
 	create_custom_fields(fields, ignore_validate=True, update=True)
 	ensure_opening_invoice_extension()
+	ensure_sales_invoice_dispute_tab()
 
 
 def ensure_opening_invoice_extension():
@@ -51,6 +59,55 @@ def ensure_opening_invoice_extension():
 			"Data",
 			validate_fields_for_doctype=False,
 		)
+
+
+def ensure_sales_invoice_dispute_tab():
+	"""Move a saved Sales Invoice field order onto the Dispute tab.
+
+	Customize Form stores the whole field order. While that list still has the
+	Dispute section after the customer, Company and the posting dates stay
+	inside it, and insert_after is ignored.
+	"""
+	if not frappe.db.exists("DocType", "Sales Invoice"):
+		return
+	if not frappe.db.exists("DocType", "Property Setter"):
+		return
+	rows = frappe.get_all(
+		"Property Setter",
+		filters={
+			"doc_type": "Sales Invoice",
+			"doctype_or_field": "DocType",
+			"property": "field_order",
+		},
+		fields=["name", "value"],
+	)
+	if not rows:
+		return
+	frappe.clear_cache(doctype="Sales Invoice")
+	meta = frappe.get_meta("Sales Invoice")
+	present = [name for name in dispute_tab_fieldnames() if meta.has_field(name)]
+	changed = False
+	for row in rows:
+		try:
+			current = frappe.parse_json(row.value)
+		except (TypeError, ValueError):
+			continue
+		if not isinstance(current, list):
+			continue
+		cleaned = [clean_text(item) for item in current if clean_text(item)]
+		updated = dispute_tab_field_order(cleaned + [name for name in present if name not in cleaned])
+		if updated == cleaned:
+			continue
+		frappe.db.set_value(
+			"Property Setter",
+			row.name,
+			"value",
+			json.dumps(updated),
+			update_modified=False,
+		)
+		changed = True
+	if changed:
+		frappe.clear_cache(doctype="Sales Invoice")
 
 
 def get_custom_fields():

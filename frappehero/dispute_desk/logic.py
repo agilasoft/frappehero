@@ -280,6 +280,108 @@ def sales_invoice_dispute_fields() -> list[dict]:
 	]
 
 
+def dispute_tab_fieldnames() -> tuple[str, ...]:
+	return tuple(row["fieldname"] for row in sales_invoice_dispute_fields())
+
+
+def dispute_tab_field_order(field_order) -> list[str]:
+	"""Put the dispute fields on a tab at the end of a Sales Invoice field order.
+
+	Customize Form can save a field order that leaves the Dispute section in
+	the invoice header, between the customer and Company. Those fields are
+	removed from the middle. Company, the posting dates, and the credit-note
+	checks keep their relative order. The Dispute tab and its fields are appended.
+	"""
+	names = dispute_tab_fieldnames()
+	tab = "hero_dispute_tab"
+	dispute = set(names)
+	incoming = [clean_text(name) for name in field_order or [] if clean_text(name)]
+	present = set(incoming)
+	if not (present & (dispute - {tab})):
+		return incoming
+	rest = [name for name in incoming if name not in dispute]
+	body = [name for name in names if name == tab or name in present]
+	return rest + body
+
+
+def _header_section(fields) -> list[dict]:
+	"""The section that holds Customer, or Title when Customer is absent.
+
+	An earlier section, including an empty one, must not hide the header.
+	Tab and section breaks start a new section and are not part of it.
+	"""
+	sections = []
+	current = []
+	for field in fields or []:
+		if not isinstance(field, dict):
+			continue
+		fieldname = clean_text(field.get("fieldname"))
+		if fieldname == "__newname":
+			continue
+		fieldtype = clean_text(field.get("fieldtype"))
+		if fieldtype in {"Tab Break", "Section Break"}:
+			if current:
+				sections.append(current)
+			current = []
+			continue
+		if not fieldtype:
+			continue
+		current.append(field)
+	if current:
+		sections.append(current)
+	for section in sections:
+		names = {clean_text(row.get("fieldname")) for row in section}
+		if "customer" in names:
+			return section
+	for section in sections:
+		names = {clean_text(row.get("fieldname")) for row in section}
+		if "title" in names:
+			return section
+	return []
+
+
+def header_column_breaks_to_hide(fields) -> list[str]:
+	"""Column breaks to drop so the Sales Invoice header is three columns.
+
+	``fields`` follows the form order. Each item has ``fieldname`` and
+	``fieldtype``. The header is the section that contains Customer. A column
+	break between Title and Customer is always dropped: that split leaves
+	Title alone. Hidden breaks in the header are dropped too. When more than
+	two visible breaks remain, the earliest extras go and the last two stay,
+	so the columns are customer, dates, then the credit-note checks. Later
+	sections, including Items, keep their columns.
+	"""
+	section = _header_section(fields)
+	names = [clean_text(row.get("fieldname")) for row in section]
+	title_at = names.index("title") if "title" in names else -1
+	customer_at = names.index("customer") if "customer" in names else -1
+	hidden_breaks = []
+	between = []
+	visible_breaks = []
+	for index, field in enumerate(section):
+		if clean_text(field.get("fieldtype")) != "Column Break":
+			continue
+		fieldname = clean_text(field.get("fieldname"))
+		if not fieldname:
+			continue
+		if as_flag(field.get("hidden")):
+			hidden_breaks.append(fieldname)
+			continue
+		splits_title = title_at >= 0 and customer_at >= 0 and (
+			min(title_at, customer_at) < index < max(title_at, customer_at)
+		)
+		if splits_title:
+			between.append(fieldname)
+			continue
+		visible_breaks.append(fieldname)
+	extras = visible_breaks[:-2] if len(visible_breaks) > 2 else []
+	hide = []
+	for fieldname in hidden_breaks + between + extras:
+		if fieldname not in hide:
+			hide.append(fieldname)
+	return hide
+
+
 def sales_invoice_dispute_tab(
 	customer,
 	company,

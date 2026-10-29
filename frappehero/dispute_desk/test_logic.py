@@ -10,7 +10,9 @@ from frappehero.dispute_desk.logic import (
 	DisputeError,
 	aging_bucket,
 	close_dispute,
+	dispute_tab_field_order,
 	filter_disputes,
+	header_column_breaks_to_hide,
 	raise_dispute,
 	receivables_aging,
 	rows_for_desk,
@@ -292,6 +294,115 @@ class TestSalesInvoiceDisputeTab(unittest.TestCase):
 		self.assertLess(names.index("hero_credit_section"), names.index("hero_holds_section"))
 		self.assertEqual(by_name["hero_dispute"]["options"], "Hero Dispute")
 		self.assertEqual(by_name["hero_dispute"]["read_only"], 1)
+
+	def test_saved_field_order_lifts_the_dispute_section_out_of_the_header(self):
+		order = [
+			"title",
+			"customer",
+			"customer_name",
+			"tax_id",
+			"hero_dispute_section",
+			"hero_dispute",
+			"hero_dispute_status",
+			"company",
+			"posting_date",
+			"is_return",
+			"is_debit_note",
+			"connections_tab",
+			"logistics_tab",
+		]
+		result = dispute_tab_field_order(order)
+		self.assertEqual(
+			result,
+			[
+				"title",
+				"customer",
+				"customer_name",
+				"tax_id",
+				"company",
+				"posting_date",
+				"is_return",
+				"is_debit_note",
+				"connections_tab",
+				"logistics_tab",
+				"hero_dispute_tab",
+				"hero_dispute_section",
+				"hero_dispute",
+				"hero_dispute_status",
+			],
+		)
+		self.assertLess(result.index("tax_id"), result.index("company"))
+		self.assertLess(result.index("company"), result.index("hero_dispute_tab"))
+		self.assertEqual(dispute_tab_field_order(result), result)
+		self.assertEqual(dispute_tab_field_order(["customer", "company"]), ["customer", "company"])
+		with_credit = dispute_tab_field_order(order + ["hero_credit_section", "hero_holds_html"])
+		self.assertEqual(
+			with_credit[with_credit.index("hero_dispute_tab") :],
+			[
+				"hero_dispute_tab",
+				"hero_dispute_section",
+				"hero_dispute",
+				"hero_dispute_status",
+				"hero_credit_section",
+				"hero_holds_html",
+			],
+		)
+
+	def test_header_keeps_three_columns(self):
+		fields = [
+			{"fieldname": "__newname", "fieldtype": "Data", "hidden": 1},
+			{"fieldname": "customer_section", "fieldtype": "Section Break"},
+			{"fieldname": "title", "fieldtype": "Data"},
+			{"fieldname": "col_title", "fieldtype": "Column Break"},
+			{"fieldname": "customer", "fieldtype": "Link"},
+			{"fieldname": "company", "fieldtype": "Link"},
+			{"fieldname": "company_tax_id", "fieldtype": "Data"},
+			{"fieldname": "column_break1", "fieldtype": "Column Break"},
+			{"fieldname": "posting_date", "fieldtype": "Date"},
+			{"fieldname": "due_date", "fieldtype": "Date"},
+			{"fieldname": "column_break_14", "fieldtype": "Column Break"},
+			{"fieldname": "is_pos", "fieldtype": "Check"},
+			{"fieldname": "is_return", "fieldtype": "Check"},
+			{"fieldname": "accounting_dimensions_section", "fieldtype": "Section Break"},
+			{"fieldname": "cost_center", "fieldtype": "Link"},
+			{"fieldname": "dimension_col_break", "fieldtype": "Column Break"},
+		]
+		self.assertEqual(header_column_breaks_to_hide(fields), ["col_title"])
+		already_three = [row for row in fields if row["fieldname"] != "col_title"]
+		self.assertEqual(header_column_breaks_to_hide(already_three), [])
+		hidden = [dict(row) for row in fields]
+		hidden[3] = {"fieldname": "col_title", "fieldtype": "Column Break", "hidden": 1}
+		self.assertEqual(header_column_breaks_to_hide(hidden), ["col_title"])
+
+	def test_header_column_follows_the_customer_section(self):
+		fields = [
+			{"fieldname": "notes_section", "fieldtype": "Section Break"},
+			{"fieldname": "note", "fieldtype": "Data"},
+			{"fieldname": "note_col", "fieldtype": "Column Break"},
+			{"fieldname": "customer_section", "fieldtype": "Section Break"},
+			{"fieldname": "title", "fieldtype": "Data"},
+			{"fieldname": "col_title", "fieldtype": "Column Break"},
+			{"fieldname": "customer", "fieldtype": "Link"},
+			{"fieldname": "column_break1", "fieldtype": "Column Break"},
+			{"fieldname": "posting_date", "fieldtype": "Date"},
+			{"fieldname": "column_break_14", "fieldtype": "Column Break"},
+			{"fieldname": "is_return", "fieldtype": "Check"},
+			{"fieldname": "items_section", "fieldtype": "Section Break"},
+			{"fieldname": "items_col", "fieldtype": "Column Break"},
+		]
+		self.assertEqual(header_column_breaks_to_hide(fields), ["col_title"])
+
+	def test_title_split_is_removed_when_it_is_not_the_first_break(self):
+		fields = [
+			{"fieldname": "customer_section", "fieldtype": "Section Break"},
+			{"fieldname": "column_break_early", "fieldtype": "Column Break"},
+			{"fieldname": "title", "fieldtype": "Data"},
+			{"fieldname": "col_title", "fieldtype": "Column Break"},
+			{"fieldname": "customer", "fieldtype": "Link"},
+			{"fieldname": "column_break1", "fieldtype": "Column Break"},
+			{"fieldname": "posting_date", "fieldtype": "Date"},
+		]
+		self.assertEqual(header_column_breaks_to_hide(fields), ["col_title"])
 
 	def test_credit_position_and_credit_notes(self):
 		tab = sales_invoice_dispute_tab(
