@@ -48,6 +48,7 @@ def ensure_opening_invoice_extension():
 		"Text",
 		validate_fields_for_doctype=False,
 	)
+	frappe.clear_cache(doctype="Opening Invoice Creation Tool")
 	if not frappe.db.exists("DocType", "Opening Invoice Creation Tool Item"):
 		return
 	if frappe.get_meta("Opening Invoice Creation Tool Item").has_field("supplier_invoice_date"):
@@ -59,6 +60,7 @@ def ensure_opening_invoice_extension():
 			"Data",
 			validate_fields_for_doctype=False,
 		)
+		frappe.clear_cache(doctype="Opening Invoice Creation Tool Item")
 
 
 def ensure_sales_invoice_dispute_tab():
