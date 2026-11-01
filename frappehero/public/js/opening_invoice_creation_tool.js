@@ -62,6 +62,10 @@ frappe.ui.form.on("Opening Invoice Creation Tool", {
 		setTimeout(() => prepare_form(frm), 0);
 	},
 
+	onload_post_render(frm) {
+		extend_invoice_types(frm);
+	},
+
 	invoice_type(frm) {
 		setTimeout(() => prepare_form(frm), 0);
 	},
@@ -102,6 +106,8 @@ function extend_invoice_types(frm) {
 		}
 	});
 	frm.set_df_property("invoice_type", "options", list.filter(Boolean).join("\n"));
+	// set_df_property skips refresh when the metadata already has these options.
+	frm.refresh_field("invoice_type");
 }
 
 function set_primary_action(frm) {
