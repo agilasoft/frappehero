@@ -36,6 +36,10 @@ function form(options = "Sales\nPurchase") {
 							this.rendered_options = list;
 						}
 					},
+					add_options(input, options_list) {
+						input.painted = options_list.slice();
+						return options_list.slice();
+					},
 				},
 			},
 		},
@@ -127,6 +131,69 @@ test("type choices reach the rendered select when metadata is a different copy",
 	assert.equal(meta.options, expected.join("\n"));
 	assert.equal(control.df.options, expected.join("\n"));
 	assert.deepEqual(control.rendered_options, expected);
+});
+
+test("the select builder adds credit note and debit note to sales and purchase", () => {
+	const { context } = form();
+	const control = {
+		df: {
+			fieldname: "invoice_type",
+			parent: "Opening Invoice Creation Tool",
+			options: "Sales\nPurchase",
+		},
+		frm: { doctype: "Opening Invoice Creation Tool" },
+	};
+	const input = {
+		closest(selector) {
+			assert.equal(selector, ".frappe-control");
+			return { fieldobj: control };
+		},
+	};
+	const painted = context.frappe.ui.form.add_options(input, ["Sales", "Purchase"]);
+	assert.deepEqual(Array.from(painted), expected);
+	assert.equal(control.df.options, expected.join("\n"));
+});
+
+test("other selects keep the options they were given", () => {
+	const { context } = form();
+	const input = {
+		closest() {
+			return { fieldobj: { df: { fieldname: "status", parent: "Sales Invoice" } } };
+		},
+	};
+	const painted = context.frappe.ui.form.add_options(input, ["Draft", "Paid"]);
+	assert.deepEqual(painted, ["Draft", "Paid"]);
+});
+
+test("an already drawn select gains credit note and debit note", () => {
+	const { frm, control, events } = form();
+	const nodes = [{ value: "Sales" }, { value: "Purchase" }];
+	const select = {
+		tagName: "SELECT",
+		value: "Sales",
+		options: nodes,
+		get firstChild() {
+			return nodes[0] || null;
+		},
+		removeChild() {
+			nodes.shift();
+		},
+		appendChild(option) {
+			nodes.push(option);
+		},
+		ownerDocument: {
+			createElement() {
+				return {};
+			},
+		},
+	};
+	control.$input = select;
+	events.setup(frm);
+	assert.deepEqual(
+		nodes.map((option) => option.value),
+		expected
+	);
+	assert.equal(select.value, "Sales");
 });
 
 test("a later select refresh cannot drop credit note or debit note", () => {
