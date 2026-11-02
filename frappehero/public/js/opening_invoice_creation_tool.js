@@ -55,11 +55,13 @@ frappe.provide("frappehero");
 
 	frappe.ui.form.on("Opening Invoice Creation Tool", {
 		setup(frm) {
+			install_type_guard();
 			extend_invoice_types(frm);
 			install_note_alert();
 		},
 
 		refresh(frm) {
+			install_type_guard();
 			extend_invoice_types(frm);
 			watch_grid(frm);
 			install_note_alert();
@@ -82,6 +84,7 @@ frappe.provide("frappehero");
 		},
 	});
 
+	install_type_guard();
 	frappehero._opening_invoice_tool_registered = true;
 
 	function prepare_form(frm) {
@@ -101,20 +104,90 @@ frappe.provide("frappehero");
 	}
 
 	function extend_invoice_types(frm) {
-		const field = frm.fields_dict.invoice_type;
-		if (!field) {
+		const field = frm.fields_dict && frm.fields_dict.invoice_type;
+		if (!field || !field.df) {
 			return;
 		}
-		const current = field.df.options || "";
-		const list = Array.isArray(current) ? current.slice() : String(current).split("\n");
+		const options = options_with_notes(field.df.options);
+		// set_df_property writes the per-document copy. The rendered select can
+		// still be holding the base field, which only lists Sales and Purchase.
+		stamp_option_sources(frm, options);
+		frm.set_df_property("invoice_type", "options", options);
+		stamp_option_sources(frm, options);
+		field.last_options = null;
+		frm.refresh_field("invoice_type");
+	}
+
+	function options_with_notes(current) {
+		const source = Array.isArray(current) ? current : String(current || "").split(/\r?\n/);
+		const list = [];
+		source.forEach((option) => {
+			const text = String(option || "").trim();
+			if (text && !list.includes(text)) {
+				list.push(text);
+			}
+		});
 		["Credit Note", "Debit Note"].forEach((option) => {
 			if (!list.includes(option)) {
 				list.push(option);
 			}
 		});
-		frm.set_df_property("invoice_type", "options", list.filter(Boolean).join("\n"));
-		// set_df_property skips refresh when the metadata already has these options.
-		frm.refresh_field("invoice_type");
+		return list.join("\n");
+	}
+
+	function stamp_option_sources(frm, options) {
+		const field = frm.fields_dict && frm.fields_dict.invoice_type;
+		if (field && field.df) {
+			field.df.options = options;
+		}
+		const meta = frappe.meta;
+		if (!meta) {
+			return;
+		}
+		const map = meta.docfield_map && meta.docfield_map[frm.doctype];
+		if (map && map.invoice_type) {
+			map.invoice_type.options = options;
+		}
+		const copies = meta.docfield_copy && meta.docfield_copy[frm.doctype];
+		if (!copies) {
+			return;
+		}
+		Object.keys(copies).forEach((name) => {
+			const df = copies[name] && copies[name].invoice_type;
+			if (df) {
+				df.options = options;
+			}
+		});
+	}
+
+	function install_type_guard() {
+		const Control = frappe.ui && frappe.ui.form && frappe.ui.form.ControlSelect;
+		if (!Control || !Control.prototype || Control.prototype._hero_opening_types) {
+			return;
+		}
+		const original = Control.prototype.set_options;
+		if (typeof original !== "function") {
+			return;
+		}
+		Control.prototype.set_options = function (value) {
+			if (is_opening_type_control(this)) {
+				const options = options_with_notes(this.df && this.df.options);
+				if (this.df && this.df.options !== options) {
+					this.df.options = options;
+					this.last_options = null;
+				}
+			}
+			return original.call(this, value);
+		};
+		Control.prototype._hero_opening_types = true;
+	}
+
+	function is_opening_type_control(control) {
+		if (!control || !control.df || control.df.fieldname !== "invoice_type") {
+			return false;
+		}
+		const doctype = (control.frm && control.frm.doctype) || control.df.parent;
+		return doctype === "Opening Invoice Creation Tool";
 	}
 
 	function set_primary_action(frm) {

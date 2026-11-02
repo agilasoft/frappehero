@@ -48,6 +48,15 @@ def ensure_opening_invoice_extension():
 		"Text",
 		validate_fields_for_doctype=False,
 	)
+	# The desk stores this DocType in the browser and reuses it while
+	# DocType.modified is unchanged. A property setter does not move that
+	# timestamp, so Invoice Type stays Sales and Purchase.
+	frappe.db.set_value(
+		"DocType",
+		"Opening Invoice Creation Tool",
+		"modified",
+		frappe.utils.now(),
+	)
 	frappe.clear_cache(doctype="Opening Invoice Creation Tool")
 	if not frappe.db.exists("DocType", "Opening Invoice Creation Tool Item"):
 		return

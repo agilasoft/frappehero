@@ -25,6 +25,17 @@ function form(options = "Sales\nPurchase") {
 						registrations.push(doctype);
 						handlers[doctype] = events;
 					},
+					ControlSelect: class {
+						set_options() {
+							const raw = (this.df && this.df.options) || "";
+							const list = (Array.isArray(raw) ? raw : String(raw).split("\n")).filter(Boolean);
+							if (JSON.stringify(list) === this.last_options) {
+								return;
+							}
+							this.last_options = JSON.stringify(list);
+							this.rendered_options = list;
+						}
+					},
 				},
 			},
 		},
@@ -102,4 +113,34 @@ test("array options and existing additional choices are preserved", () => {
 	const { frm, control, events } = form(["Sales", "Purchase", "Custom", "Credit Note"]);
 	events.setup(frm);
 	assert.deepEqual(control.rendered_options, ["Sales", "Purchase", "Custom", "Credit Note", "Debit Note"]);
+});
+
+test("type choices reach the rendered select when metadata is a different copy", () => {
+	const { frm, control, events } = form();
+	const meta = { options: "Sales\nPurchase" };
+	frm.doctype = "Opening Invoice Creation Tool";
+	frm.set_df_property = (fieldname, property, value) => {
+		assert.equal(fieldname, "invoice_type");
+		meta[property] = value;
+	};
+	events.setup(frm);
+	assert.equal(meta.options, expected.join("\n"));
+	assert.equal(control.df.options, expected.join("\n"));
+	assert.deepEqual(control.rendered_options, expected);
+});
+
+test("a later select refresh cannot drop credit note or debit note", () => {
+	const { context } = form();
+	const Control = context.frappe.ui.form.ControlSelect;
+	const control = new Control();
+	control.df = {
+		fieldname: "invoice_type",
+		parent: "Opening Invoice Creation Tool",
+		options: "Sales\nPurchase",
+	};
+	control.frm = { doctype: "Opening Invoice Creation Tool" };
+	control.last_options = JSON.stringify(expected);
+	control.rendered_options = ["Sales", "Purchase"];
+	control.set_options();
+	assert.deepEqual(control.rendered_options, expected);
 });
