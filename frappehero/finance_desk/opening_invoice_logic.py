@@ -130,14 +130,16 @@ def against_can_link(name, company, invoice_company, docstatus) -> bool:
 def apply_note(invoice, kind, against, linked) -> dict:
 	"""Turn an opening invoice dict into a credit note or a debit note.
 
-	Sales and Purchase invoices are returned as they are. The input dict is
-	left unchanged.
+	Sales and Purchase invoices are returned as they are. The input mapping is
+	left unchanged. A credit or debit note is a copy of the same mapping class:
+	ERPNext's importer reads invoice_number and doctype as attributes, and a
+	plain dict copy drops that access.
 	"""
 	if not invoice or not kind or not kind.get("is_return"):
 		return invoice
 	items = []
 	for item in invoice.get("items") or []:
-		rewritten = dict(item)
+		rewritten = _copy_mapping(item)
 		qty, rate = return_line(rewritten.get("qty"), rewritten.get("rate"))
 		rewritten["qty"] = qty
 		rewritten["rate"] = rate
@@ -145,7 +147,7 @@ def apply_note(invoice, kind, against, linked) -> dict:
 		rewritten["item_name"] = title
 		rewritten["description"] = retitle(rewritten.get("description"), kind["item_name"])
 		items.append(rewritten)
-	stamped = dict(invoice)
+	stamped = _copy_mapping(invoice)
 	stamped["items"] = items
 	stamped["doctype"] = kind["doctype"]
 	stamped["is_return"] = 1
@@ -160,6 +162,13 @@ def apply_note(invoice, kind, against, linked) -> dict:
 		remarks = clean_text(stamped.get("remarks"))
 		stamped["remarks"] = f"{remarks} {note}".strip() if remarks else note
 	return stamped
+
+
+def _copy_mapping(value):
+	"""Copy a mapping without dropping attribute access on dict subclasses."""
+	if isinstance(value, dict):
+		return type(value)(value)
+	return dict(value)
 
 
 def _number(value) -> float:
