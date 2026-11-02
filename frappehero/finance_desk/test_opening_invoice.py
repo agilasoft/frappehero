@@ -120,6 +120,26 @@ class TestApplyNote(unittest.TestCase):
 		self.assertEqual(stamped["items"][0]["description"], "Opening Credit Note Original Quantity: 2.5")
 		self.assertNotIn("remarks", stamped)
 
+	def test_credit_note_keeps_attribute_access_for_the_importer(self):
+		class Row(dict):
+			def __getattr__(self, name):
+				try:
+					return self[name]
+				except KeyError as exc:
+					raise AttributeError(name) from exc
+
+		source = Row(_invoice())
+		source["invoice_number"] = "CRDN-MNL-00001171"
+		item = Row(source["items"][0])
+		source["items"] = [item]
+		stamped = apply_note(source, invoice_kind("Credit Note"), "", linked=False)
+		self.assertIsInstance(stamped, Row)
+		self.assertEqual(stamped.invoice_number, "CRDN-MNL-00001171")
+		self.assertEqual(stamped.doctype, "Sales Invoice")
+		self.assertIsInstance(stamped["items"][0], Row)
+		self.assertEqual(stamped["items"][0].qty, -1.0)
+		self.assertEqual(source["doctype"], "Purchase Invoice")
+
 	def test_sales_upload_is_left_alone(self):
 		source = _invoice()
 		self.assertIs(apply_note(source, invoice_kind("Sales"), "SINV-1", linked=True), source)
