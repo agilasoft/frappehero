@@ -11,6 +11,8 @@ frappe.provide("frappehero");
 		return;
 	}
 
+	install_type_guard();
+
 	const NOTE_TYPES = {
 		"Credit Note": {
 			party_type: "Customer",
@@ -66,7 +68,11 @@ frappe.provide("frappehero");
 			watch_grid(frm);
 			install_note_alert();
 			// ERPNext sets the button and party labels in its own refresh handler.
-			setTimeout(() => prepare_form(frm), 0);
+			// Paint again after that, in case the select was rebuilt from Sales and Purchase.
+			setTimeout(() => {
+				paint_opening_select(frm.fields_dict && frm.fields_dict.invoice_type);
+				prepare_form(frm);
+			}, 0);
 		},
 
 		onload_post_render(frm) {
@@ -115,14 +121,23 @@ frappe.provide("frappehero");
 		frm.set_df_property("invoice_type", "options", options);
 		stamp_option_sources(frm, options);
 		field.last_options = null;
+		paint_opening_select(field);
 		frm.refresh_field("invoice_type");
+		paint_opening_select(field);
+	}
+
+	function option_label(option) {
+		if (option && typeof option === "object") {
+			return option.value == null ? option.label : option.value;
+		}
+		return option;
 	}
 
 	function options_with_notes(current) {
 		const source = Array.isArray(current) ? current : String(current || "").split(/\r?\n/);
 		const list = [];
 		source.forEach((option) => {
-			const text = String(option || "").trim();
+			const text = String(option_label(option) || "").trim();
 			if (text && !list.includes(text)) {
 				list.push(text);
 			}
@@ -133,6 +148,49 @@ frappe.provide("frappehero");
 			}
 		});
 		return list.join("\n");
+	}
+
+	function paint_opening_select(field) {
+		const input = select_element(field);
+		if (!input || typeof input.appendChild !== "function" || !input.ownerDocument) {
+			return;
+		}
+		const wanted = options_with_notes(
+			Array.from(input.options || []).map((option) => option.value)
+		).split("\n");
+		const current = Array.from(input.options || []).map((option) => option.value);
+		if (current.join("\n") === wanted.join("\n")) {
+			return;
+		}
+		const selected = input.value;
+		while (input.firstChild) {
+			input.removeChild(input.firstChild);
+		}
+		wanted.forEach((label) => {
+			const option = input.ownerDocument.createElement("option");
+			option.value = label;
+			option.text = label;
+			input.appendChild(option);
+		});
+		if (wanted.includes(selected)) {
+			input.value = selected;
+		}
+		field.last_options = null;
+		if (field.df) {
+			field.df.options = wanted.join("\n");
+		}
+	}
+
+	function select_element(field) {
+		const input = field && field.$input;
+		if (!input) {
+			return null;
+		}
+		const element = input.jquery ? input.get(0) : input;
+		if (!element || String(element.tagName || "").toUpperCase() !== "SELECT") {
+			return null;
+		}
+		return element;
 	}
 
 	function stamp_option_sources(frm, options) {
@@ -161,25 +219,68 @@ frappe.provide("frappehero");
 	}
 
 	function install_type_guard() {
-		const Control = frappe.ui && frappe.ui.form && frappe.ui.form.ControlSelect;
-		if (!Control || !Control.prototype || Control.prototype._hero_opening_types) {
+		const form_ui = frappe.ui && frappe.ui.form;
+		if (!form_ui) {
 			return;
 		}
-		const original = Control.prototype.set_options;
-		if (typeof original !== "function") {
-			return;
-		}
-		Control.prototype.set_options = function (value) {
-			if (is_opening_type_control(this)) {
-				const options = options_with_notes(this.df && this.df.options);
-				if (this.df && this.df.options !== options) {
-					this.df.options = options;
-					this.last_options = null;
+		const Control = form_ui.ControlSelect;
+		if (
+			Control &&
+			Control.prototype &&
+			!Control.prototype._hero_opening_types &&
+			typeof Control.prototype.set_options === "function"
+		) {
+			const original = Control.prototype.set_options;
+			Control.prototype.set_options = function (value) {
+				if (is_opening_type_control(this)) {
+					const options = options_with_notes(this.df && this.df.options);
+					if (!this.df || this.df.options !== options || select_missing_notes(this)) {
+						if (this.df) {
+							this.df.options = options;
+						}
+						this.last_options = null;
+					}
 				}
-			}
-			return original.call(this, value);
-		};
-		Control.prototype._hero_opening_types = true;
+				return original.call(this, value);
+			};
+			Control.prototype._hero_opening_types = true;
+		}
+		if (typeof form_ui.add_options === "function" && !form_ui.add_options._hero_opening_types) {
+			const original_add = form_ui.add_options;
+			const add_options = function (input, options_list, sort, doctype) {
+				const control = opening_select_control(input);
+				if (control) {
+					const options = options_with_notes(options_list);
+					options_list = options.split("\n");
+					if (control.df) {
+						control.df.options = options;
+					}
+					control.last_options = null;
+				}
+				return original_add.call(this, input, options_list, sort, doctype);
+			};
+			add_options._hero_opening_types = true;
+			form_ui.add_options = add_options;
+		}
+	}
+
+	function select_missing_notes(control) {
+		const input = select_element(control);
+		if (!input || !input.options) {
+			return false;
+		}
+		const values = Array.from(input.options).map((option) => option.value);
+		return !values.includes("Credit Note") || !values.includes("Debit Note");
+	}
+
+	function opening_select_control(input) {
+		const element = input && input.jquery ? input.get(0) : input;
+		if (!element || typeof element.closest !== "function") {
+			return null;
+		}
+		const wrapper = element.closest(".frappe-control");
+		const control = wrapper && wrapper.fieldobj;
+		return is_opening_type_control(control) ? control : null;
 	}
 
 	function is_opening_type_control(control) {

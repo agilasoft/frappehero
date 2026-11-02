@@ -48,6 +48,15 @@ def ensure_opening_invoice_extension():
 		"Text",
 		validate_fields_for_doctype=False,
 	)
+	# The dropdown reads this DocField. A property setter alone stays invisible
+	# while the browser is still holding the Sales and Purchase copy.
+	frappe.db.set_value(
+		"DocField",
+		{"parent": "Opening Invoice Creation Tool", "fieldname": "invoice_type"},
+		"options",
+		INVOICE_TYPE_OPTIONS,
+		update_modified=False,
+	)
 	# The desk stores this DocType in the browser and reuses it while
 	# DocType.modified is unchanged. A property setter does not move that
 	# timestamp, so Invoice Type stays Sales and Purchase.
