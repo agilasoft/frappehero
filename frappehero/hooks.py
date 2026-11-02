@@ -23,7 +23,10 @@ add_to_apps_screen = [
 ]
 
 app_include_css = "/assets/frappehero/css/frappehero.css"
-app_include_js = "/assets/frappehero/js/frappehero.js"
+app_include_js = [
+	"/assets/frappehero/js/frappehero.js",
+	"/assets/frappehero/js/opening_invoice_creation_tool.js",
+]
 
 doctype_list_js = {
 	"Hero Permission Group": "public/js/hero_permission_group_list.js",

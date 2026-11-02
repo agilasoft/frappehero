@@ -12,13 +12,21 @@ const expected = ["Sales", "Purchase", "Credit Note", "Debit Note"];
 
 function form(options = "Sales\nPurchase") {
 	const handlers = {};
+	const registrations = [];
 	const context = vm.createContext({
 		__: (text) => text,
 		frappehero: {},
 		frappe: {
 			provide() {},
 			show_alert() {},
-			ui: { form: { on: (doctype, events) => (handlers[doctype] = events) } },
+			ui: {
+				form: {
+					on(doctype, events) {
+						registrations.push(doctype);
+						handlers[doctype] = events;
+					},
+				},
+			},
 		},
 		setTimeout() {},
 	});
@@ -40,8 +48,24 @@ function form(options = "Sales\nPurchase") {
 			control.rendered_options = df.options.split("\n");
 		},
 	};
-	return { frm, control, events: handlers["Opening Invoice Creation Tool"] };
+	return { frm, control, events: handlers["Opening Invoice Creation Tool"], context, registrations };
 }
+
+test("Desk asset enables notes without a DocType script in cached metadata", () => {
+	const { frm, control, events } = form();
+	assert.ok(events);
+	events.setup(frm);
+	assert.deepEqual(control.rendered_options, expected);
+});
+
+test("loading the Desk asset and DocType hook registers handlers only once", () => {
+	const { context, registrations } = form();
+	vm.runInContext(source, context);
+	assert.deepEqual(registrations, [
+		"Opening Invoice Creation Tool",
+		"Opening Invoice Creation Tool Item",
+	]);
+});
 
 test("setup renders both note choices alongside standard invoice types", () => {
 	const { frm, control, events } = form();

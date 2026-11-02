@@ -5,10 +5,17 @@ import json
 import unittest
 from pathlib import Path
 
+from frappehero import hooks
+
 PACKAGE = Path(__file__).resolve().parent
 
 
 class TestAppStructure(unittest.TestCase):
+	def test_opening_invoice_extension_loads_without_cached_doctype_scripts(self):
+		script = hooks.doctype_js["Opening Invoice Creation Tool"]
+		self.assertIn(f"/assets/frappehero/{script.removeprefix('public/')}", hooks.app_include_js)
+		self.assertTrue((PACKAGE / script).is_file())
+
 	def test_modules_cover_every_doctype_page_and_report(self):
 		modules = {
 			line.strip()
