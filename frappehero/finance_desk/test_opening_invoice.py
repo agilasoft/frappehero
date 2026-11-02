@@ -8,10 +8,12 @@ from frappehero.finance_desk.opening_invoice_logic import (
 	OpeningInvoiceError,
 	against_can_link,
 	apply_note,
+	fold_opening_summary,
 	invoice_kind,
 	is_note,
 	retitle,
 	return_line,
+	summary_label,
 )
 
 
@@ -79,6 +81,52 @@ class TestReturnLines(unittest.TestCase):
 
 	def test_non_numeric_values_do_not_post_infinity(self):
 		self.assertEqual(return_line("nope", float("inf")), (-1.0, 0.0))
+
+
+class TestOpeningSummary(unittest.TestCase):
+	def test_notes_are_separate_from_invoices(self):
+		summary, max_count = fold_opening_summary(
+			{"Acme": "PHP", "Atlas": "USD"},
+			{
+				"Sales Invoice": [
+					{"company": "Acme", "is_return": 0, "total_invoices": 10, "outstanding_amount": 100},
+					{"company": "Acme", "is_return": None, "total_invoices": 3, "outstanding_amount": 7},
+					{"company": "Acme", "is_return": 1, "total_invoices": 2, "outstanding_amount": -15},
+					{"company": "Atlas", "is_return": "1", "total_invoices": 1, "outstanding_amount": -4},
+				],
+				"Purchase Invoice": [
+					{"company": "Acme", "is_return": 0, "total_invoices": 4, "outstanding_amount": 40},
+					{"company": "Acme", "is_return": True, "total_invoices": 1, "outstanding_amount": -5},
+				],
+			},
+		)
+		self.assertEqual(
+			[
+				summary_label(row["doctype"], row["is_return"])
+				for row in (
+					{"doctype": "Sales Invoice", "is_return": 0},
+					{"doctype": "Sales Invoice", "is_return": 1},
+					{"doctype": "Purchase Invoice", "is_return": 0},
+					{"doctype": "Purchase Invoice", "is_return": 1},
+				)
+			],
+			["Sales Invoice", "Credit Note", "Purchase Invoice", "Debit Note"],
+		)
+		acme = summary["Acme"]
+		self.assertEqual(acme["currency"], "PHP")
+		self.assertEqual(acme["Sales Invoice"], {"total_invoices": 13, "outstanding_amount": 107.0})
+		self.assertEqual(acme["Credit Note"], {"total_invoices": 2, "outstanding_amount": -15.0})
+		self.assertEqual(acme["Purchase Invoice"]["total_invoices"], 4)
+		self.assertEqual(acme["Debit Note"]["outstanding_amount"], -5.0)
+		self.assertEqual(summary["Atlas"]["Credit Note"]["outstanding_amount"], -4.0)
+		self.assertNotIn("Sales Invoice", summary["Atlas"])
+		self.assertEqual(max_count["Credit Note"]["max_due"], -4.0)
+		self.assertEqual(max_count["Sales Invoice"]["max_due"], 107.0)
+
+	def test_company_with_no_invoices_is_omitted(self):
+		summary, max_count = fold_opening_summary({"Acme": "PHP"}, {})
+		self.assertEqual(summary, {})
+		self.assertEqual(max_count, {})
 
 
 class TestApplyNote(unittest.TestCase):

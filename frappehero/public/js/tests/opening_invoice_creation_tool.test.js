@@ -211,3 +211,37 @@ test("a later select refresh cannot drop credit note or debit note", () => {
 	control.set_options();
 	assert.deepEqual(control.rendered_options, expected);
 });
+
+test("opening summary lists credit notes and debit notes on their own rows", () => {
+	const { context } = form();
+	const rows = context.frappehero.opening_summary_rows();
+	assert.equal(
+		JSON.stringify(rows.map((row) => row.label)),
+		JSON.stringify(["Sales Invoice", "Credit Note", "Purchase Invoice", "Debit Note"])
+	);
+	const credit = rows.find((row) => row.label === "Credit Note");
+	const debit = rows.find((row) => row.label === "Debit Note");
+	const creditRoute = context.frappehero.opening_summary_route(
+		credit.doctype,
+		"ALL TRANSPORT NETWORK, INC.",
+		credit.is_return
+	);
+	assert.equal(String(creditRoute.doctype), "Sales Invoice");
+	assert.equal(
+		JSON.stringify(creditRoute.filters),
+		JSON.stringify({
+			is_opening: "Yes",
+			company: "ALL TRANSPORT NETWORK, INC.",
+			docstatus: 1,
+			is_return: "1",
+		})
+	);
+	const debitRoute = context.frappehero.opening_summary_route(
+		debit.doctype,
+		"ALL SYSTEMS LOGISTICS INC.",
+		debit.is_return
+	);
+	assert.equal(debitRoute.doctype, "Purchase Invoice");
+	assert.equal(debitRoute.filters.is_return, "1");
+	assert.match(source, /data-return/);
+});
