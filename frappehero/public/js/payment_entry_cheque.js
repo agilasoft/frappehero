@@ -53,15 +53,29 @@ frappe.ui.form.on("Payment Entry", {
 	hero_cheque_leaf(frm) {
 		suggest_cheque(frm, true);
 	},
+
+	hero_cheque_number(frm) {
+		if (frm.__cheque_silent || frm.doc.payment_type !== "Pay") {
+			return;
+		}
+		const number = frm.doc.hero_cheque_number || "";
+		if (number && frm.doc.reference_no !== number) {
+			frm.set_value("reference_no", number);
+		}
+	},
 });
 
 async function clear_cheque(frm) {
 	if (frm.__cheque_silent || (!frm.doc.hero_cheque_leaf && !frm.doc.hero_cheque_number)) {
 		return;
 	}
+	const number = frm.doc.hero_cheque_number || "";
 	frm.__cheque_silent = true;
 	await frm.set_value("hero_cheque_leaf", "");
 	await frm.set_value("hero_cheque_number", "");
+	if (number && frm.doc.reference_no === number) {
+		await frm.set_value("reference_no", "");
+	}
 	frm.__cheque_silent = false;
 }
 
@@ -84,11 +98,26 @@ async function suggest_cheque(frm, leafChanged) {
 		await frm.set_value("hero_cheque_leaf", preview.leaf);
 	}
 	if (leafChanged && !preview.cheque_number) {
-		await frm.set_value("hero_cheque_number", "");
-	} else if (preview.cheque_number && (leafChanged || !frm.doc.hero_cheque_number)) {
-		await frm.set_value("hero_cheque_number", preview.cheque_number);
+		await apply_cheque_number(frm, "");
+	} else if (preview.cheque_number && (leafChanged || !frm.doc.hero_cheque_number || !frm.doc.reference_no)) {
+		await apply_cheque_number(frm, preview.cheque_number);
+	} else if (frm.doc.hero_cheque_number && frm.doc.reference_no !== frm.doc.hero_cheque_number) {
+		await apply_cheque_number(frm, frm.doc.hero_cheque_number);
 	}
 	frm.__cheque_silent = false;
+}
+
+async function apply_cheque_number(frm, number) {
+	const next = number || "";
+	if ((frm.doc.hero_cheque_number || "") !== next) {
+		await frm.set_value("hero_cheque_number", next);
+	}
+	if ((frm.doc.reference_no || "") !== next) {
+		await frm.set_value("reference_no", next);
+	}
+	if (next && !frm.doc.reference_date && frm.doc.posting_date) {
+		await frm.set_value("reference_date", frm.doc.posting_date);
+	}
 }
 
 async function assign_cheque(frm) {
@@ -124,7 +153,7 @@ async function assign_cheque(frm) {
 		async (values) => {
 			frm.__cheque_silent = true;
 			await frm.set_value("hero_cheque_leaf", preview.leaf);
-			await frm.set_value("hero_cheque_number", values.cheque_number);
+			await apply_cheque_number(frm, values.cheque_number);
 			frm.__cheque_silent = false;
 		},
 		__("Assign Cheque Number"),

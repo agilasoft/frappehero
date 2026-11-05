@@ -11,6 +11,7 @@ from frappehero.finance_desk.cheque_logic import (
 	mode_uses_cheque_leaf,
 	plan_payment_cheque,
 	preview_cheque,
+	reference_no_for,
 	summarize_book,
 	summarize_numbers,
 )
@@ -84,12 +85,11 @@ def _apply_plan(doc, plan, action):
 			"hero_cheque_number": plan["cheque_number"],
 			"hero_cheque_state": plan["state"],
 		}
-		if plan["set_reference_no"] and plan["cheque_number"]:
-			values["reference_no"] = plan["cheque_number"]
-			if not doc.get("reference_date") and doc.get("posting_date"):
+		reference_no = reference_no_for(plan)
+		if reference_no is not None:
+			values["reference_no"] = reference_no
+			if reference_no and not doc.get("reference_date") and doc.get("posting_date"):
 				values["reference_date"] = doc.posting_date
-		elif plan["clear_reference_no"]:
-			values["reference_no"] = ""
 	for fieldname, value in values.items():
 		doc.set(fieldname, value)
 	if doc.docstatus in (1, 2) and doc.name and not doc.get("__islocal"):

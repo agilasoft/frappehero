@@ -317,7 +317,12 @@ def plan_payment_cheque(
 	if action not in ("save", "submit", "cancel", "trash"):
 		return _result(error="Cheque assignment supports save, submit, cancel, and trash.")
 	if action == "save" and int(docstatus or 0) >= 1:
-		return _result(leaf=previous_leaf, cheque_number=previous_number, state="Used")
+		return _result(
+			leaf=previous_leaf,
+			cheque_number=previous_number,
+			state="Used",
+			set_reference_no=bool(previous_number),
+		)
 	if action in ("cancel", "trash"):
 		return _finish_payment(
 			action,
@@ -557,6 +562,22 @@ def _find_row(rows, number):
 	for row in rows or []:
 		if clean_text(row.get("cheque_number")) == number:
 			return row
+	return None
+
+
+def reference_no_for(plan):
+	"""Value for Payment Entry.reference_no.
+
+	The chosen cheque number is that value. None means the current reference
+	stays as it is.
+	"""
+	if plan.get("error"):
+		return None
+	number = clean_text(plan.get("cheque_number"))
+	if plan.get("set_reference_no") and number:
+		return number
+	if plan.get("clear_reference_no"):
+		return ""
 	return None
 
 

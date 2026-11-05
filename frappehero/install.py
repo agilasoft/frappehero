@@ -145,7 +145,7 @@ def get_custom_fields():
 				"depends_on": "eval:doc.payment_type=='Pay'",
 				"no_copy": 1,
 				"in_standard_filter": 1,
-				"description": "A number from the Cheque Leaf. Saved onto Cheque/Reference No.",
+				"description": "A number from the Cheque Leaf. Written to Cheque/Reference No.",
 			},
 			{
 				"fieldname": "hero_cheque_column",

@@ -13,6 +13,7 @@ from frappehero.finance_desk.cheque_logic import (
 	parse_extra_numbers,
 	plan_payment_cheque,
 	preview_cheque,
+	reference_no_for,
 	summarize_book,
 	summarize_numbers,
 	validate_leaf_shape,
@@ -146,7 +147,7 @@ class TestAssignment(unittest.TestCase):
 		self.assertEqual(first["leaf"], "Current")
 		self.assertEqual(first["cheque_number"], "1001")
 		self.assertEqual(first["state"], "Assigned")
-		self.assertTrue(first["set_reference_no"])
+		self.assertEqual(reference_no_for(first), "1001")
 		self.assertEqual(first["updates"]["Current"][0]["status"], "Assigned")
 		held = _plan(
 			previous_leaf="Current",
@@ -154,6 +155,7 @@ class TestAssignment(unittest.TestCase):
 			numbers_by_leaf={"Current": _numbers(("1001", "Assigned", "PE-1"), "1002")},
 		)
 		self.assertEqual(held["cheque_number"], "1001")
+		self.assertEqual(reference_no_for(held), "1001")
 		self.assertEqual(held["updates"], {})
 
 	def test_specific_number_switches_and_releases_the_old_one(self):
@@ -186,7 +188,7 @@ class TestAssignment(unittest.TestCase):
 			numbers_by_leaf={"Current": _numbers(("1001", "Assigned", "PE-1"))},
 		)
 		self.assertEqual(cleared["cheque_number"], "")
-		self.assertTrue(cleared["clear_reference_no"])
+		self.assertEqual(reference_no_for(cleared), "")
 		self.assertEqual(cleared["updates"]["Current"][0]["status"], "Available")
 
 	def test_cheque_mode_picks_the_default_leaf(self):
@@ -223,6 +225,7 @@ class TestAssignment(unittest.TestCase):
 			numbers_by_leaf={"Current": _numbers(("1001", "Assigned", "PE-1"), "1002")},
 		)
 		self.assertEqual(submitted["state"], "Used")
+		self.assertEqual(reference_no_for(submitted), "1001")
 		self.assertEqual(submitted["updates"]["Current"][0]["status"], "Used")
 		voided = _plan(
 			action="cancel",
@@ -257,6 +260,7 @@ class TestAssignment(unittest.TestCase):
 	def test_submitted_payment_keeps_its_cheque(self):
 		kept = _plan(docstatus=1, previous_leaf="Current", previous_number="1001", requested_number="1002")
 		self.assertEqual(kept["cheque_number"], "1001")
+		self.assertEqual(reference_no_for(kept), "1001")
 		self.assertEqual(kept["updates"], {})
 
 	def test_switching_leaves_releases_the_previous_book(self):
