@@ -99,6 +99,8 @@ Invoice Type stores Sales, Purchase, Credit Note, and Debit Note on the field it
 
 On **Mode of Payment**, tick **Uses Cheque Leaf**, or name the mode cheque or check. A Payment Entry with Payment Type **Pay** and that mode takes the next available number from the bank account's active leaf and writes it to Cheque/Reference No. When the reference date is still empty, the posting date is used. Saving a draft reserves the number. Submitting marks it used. Cancelling the payment voids that leaf, so the number is issued once. Deleting the draft puts the number back. **Assign Cheque Number** picks a specific free number. A bank account with no active leaf leaves the reference number to be typed by hand. Accounts User can pay with a leaf. Accounts Manager sets the leaves up.
 
+**Payment References** shows **Invoice Currency** and **Invoice Currency Amount**. The amount is the referenced document's rounded total, or its grand total when the rounded total is zero. Grand Total, Outstanding, and Allocated stay in the party account currency, and the allocated amount is unchanged. A sales invoice, purchase invoice, sales order, purchase order, or expense claim uses its own currency. A journal entry sums the party lines for this payment's party, in that account's currency. A dunning contributes a currency when the document has one. Saving or submitting a draft stores the columns, and opening the payment shows them again. After updating Frappe Hero, run `bench --site <site-name> migrate` and reload Payment Entry.
+
 ## Dispute Desk
 
 System Manager and Accounts Manager.

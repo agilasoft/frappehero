@@ -27,6 +27,8 @@ def ensure_custom_fields():
 	fields = get_custom_fields()
 	if not frappe.db.exists("DocType", "Opening Invoice Creation Tool Item"):
 		fields.pop("Opening Invoice Creation Tool Item", None)
+	if not frappe.db.exists("DocType", "Payment Entry Reference"):
+		fields.pop("Payment Entry Reference", None)
 	create_custom_fields(fields, ignore_validate=True, update=True)
 	ensure_opening_invoice_extension()
 	ensure_sales_invoice_dispute_tab()
@@ -245,6 +247,31 @@ def get_custom_fields():
 				"read_only": 1,
 				"no_copy": 1,
 				"depends_on": "eval:doc.payment_type=='Pay'",
+			},
+		],
+		"Payment Entry Reference": [
+			{
+				"fieldname": "hero_invoice_currency",
+				"label": "Invoice Currency",
+				"fieldtype": "Link",
+				"options": "Currency",
+				"insert_after": "allocated_amount",
+				"read_only": 1,
+				"no_copy": 1,
+				"in_list_view": 1,
+				"columns": 2,
+			},
+			{
+				"fieldname": "hero_invoice_amount",
+				"label": "Invoice Currency Amount",
+				"fieldtype": "Currency",
+				"options": "hero_invoice_currency",
+				"insert_after": "hero_invoice_currency",
+				"read_only": 1,
+				"no_copy": 1,
+				"in_list_view": 1,
+				"columns": 2,
+				"description": "Total of the reference in its own currency. Grand Total stays in the party account currency.",
 			},
 		],
 		"Opening Invoice Creation Tool Item": [

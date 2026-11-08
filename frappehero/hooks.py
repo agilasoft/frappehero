@@ -34,7 +34,10 @@ doctype_list_js = {
 
 doctype_js = {
 	"Sales Invoice": "public/js/sales_invoice_dispute.js",
-	"Payment Entry": "public/js/payment_entry_cheque.js",
+	"Payment Entry": [
+		"public/js/payment_entry_cheque.js",
+		"public/js/payment_entry_references.js",
+	],
 	"Opening Invoice Creation Tool": "public/js/opening_invoice_creation_tool.js",
 }
 
@@ -58,7 +61,10 @@ doc_events = {
 		"validate": "frappehero.finance_desk.sync.lock_bsp_rate",
 	},
 	"Payment Entry": {
-		"before_validate": "frappehero.finance_desk.cheque.validate_payment",
+		"before_validate": [
+			"frappehero.finance_desk.payment_reference.set_invoice_currency",
+			"frappehero.finance_desk.cheque.validate_payment",
+		],
 		"validate": "frappehero.finance_desk.cheque.validate_payment",
 		"on_submit": "frappehero.finance_desk.cheque.submit_payment",
 		"on_cancel": "frappehero.finance_desk.cheque.cancel_payment",
@@ -78,5 +84,8 @@ scheduler_events = {
 # BSP rates do the same for the BSP Rate check on Currency Exchange.
 # Cheque Leaf reserves a number on Payment Entry before ERPNext asks for the
 # bank reference, then marks it used, void, or free as the payment moves.
+# Payment references also show the invoice currency and the invoice total in
+# that currency. Grand Total, Outstanding, and Allocated stay in the party
+# account currency.
 # Opening Invoice Creation Tool accepts a Credit Note upload as a return Sales
 # Invoice and a Debit Note upload as a return Purchase Invoice.
