@@ -4,6 +4,7 @@
 frappe.ui.form.on("Payment Entry", {
 	refresh(frm) {
 		set_queries(frm);
+		set_allocation_editable(frm);
 		if (frm.doc.docstatus === 0 && frm.doc.payment_type !== "Internal Transfer") {
 			frm.add_custom_button(__("Get Outstanding Invoices"), () => get_outstanding(frm));
 		}
@@ -78,6 +79,10 @@ frappe.ui.form.on("Payment Entry Reference", {
 		queue_preview(frm);
 	},
 
+	hero_allocated_invoice_amount(frm) {
+		queue_preview(frm);
+	},
+
 	hero_payment_rate(frm) {
 		queue_preview(frm);
 	},
@@ -147,6 +152,7 @@ function get_outstanding(frm) {
 				frm._hero_multi_lock = false;
 				frm.refresh_field("references");
 				frm.refresh_fields();
+				set_allocation_editable(frm);
 				frm.dirty();
 				frm._hero_multi_signature = input_signature(frm);
 			},
@@ -160,7 +166,7 @@ function get_outstanding(frm) {
 }
 
 function queue_preview(frm) {
-	if (frm._hero_multi_lock || frm.doc.docstatus || !spans_accounts(frm)) {
+	if (frm._hero_multi_lock || frm.doc.docstatus || !needs_custom(frm)) {
 		return;
 	}
 	if (frm._hero_multi_timer) {
@@ -173,7 +179,7 @@ function queue_preview(frm) {
 }
 
 function preview(frm) {
-	if (!spans_accounts(frm) || !bank_account(frm)) {
+	if (!needs_custom(frm) || !bank_account(frm)) {
 		return;
 	}
 	const signature = input_signature(frm);
@@ -201,6 +207,7 @@ function preview(frm) {
 			apply_rows(frm, message.references);
 			frm._hero_multi_lock = false;
 			frm.refresh_fields();
+			set_allocation_editable(frm);
 			frm._hero_multi_signature = input_signature(frm);
 		})
 		.catch(() => {
@@ -208,6 +215,27 @@ function preview(frm) {
 				frm._hero_multi_signature = "";
 			}
 		});
+}
+
+function needs_custom(frm) {
+	if (spans_accounts(frm)) {
+		return true;
+	}
+	return (frm.doc.references || []).some(
+		(row) =>
+			row.hero_invoice_currency &&
+			row.hero_account_currency &&
+			row.hero_invoice_currency !== row.hero_account_currency &&
+			(row.reference_name || row.hero_allocated_invoice_amount || row.allocated_amount)
+	);
+}
+
+function set_allocation_editable(frm) {
+	const field = frm.fields_dict.references;
+	if (!field || !field.grid || !field.grid.update_docfield_property) {
+		return;
+	}
+	field.grid.update_docfield_property("allocated_amount", "read_only", needs_custom(frm) ? 1 : 0);
 }
 
 function spans_accounts(frm) {
@@ -274,6 +302,7 @@ function input_signature(frm) {
 			row.hero_account || "",
 			row.reference_doctype || "",
 			row.reference_name || "",
+			row.hero_allocated_invoice_amount || 0,
 			row.allocated_amount || 0,
 			row.hero_payment_rate || 0,
 		]),

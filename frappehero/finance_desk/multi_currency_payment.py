@@ -35,7 +35,8 @@ def apply_to_payment(doc, method=None):
 	if not _should_allocate(doc):
 		return
 	_fill_missing_accounts(doc)
-	if not uses_multiple_accounts(doc):
+	_fill_account_currencies(doc)
+	if not _needs_custom_allocation(doc):
 		doc.hero_multi_account = 0
 		return
 	prepare_payment_entry(doc)
@@ -48,6 +49,7 @@ def prepare_payment_entry(doc):
 	if doc.get("party_type") not in _INVOICE_FIELDS:
 		frappe.throw(_("Multiple accounts are available for customers and suppliers."))
 	_fill_missing_accounts(doc)
+	_fill_account_currencies(doc)
 	if doc.get("taxes") or _other_deductions(doc):
 		frappe.throw(_("Deductions and taxes stay on a payment that uses one account."))
 	prepared = _prepare(doc)
@@ -349,9 +351,7 @@ def _result(
 			"bank_exchange_rate": 1 if bank.account_currency == defaults.default_currency else bank_rate,
 			"paid_amount": paid_amount,
 			"received_amount": received_amount,
-			"multi_account": 1
-			if spans_accounts(account.name, [row["account"] for row in prepared["allocations"]])
-			else 0,
+			"multi_account": _custom_allocation(account.name, prepared),
 		}
 	)
 	return prepared
@@ -390,7 +390,7 @@ def _write(doc, prepared):
 	)
 	advance = prepared.get("advance") or {}
 	doc.unallocated_amount = advance.get("amount") or 0 if advance.get("account") == header else 0
-	doc.hero_multi_account = 1 if uses_multiple_accounts_from_prepared(doc, prepared) else 0
+	doc.hero_multi_account = prepared["multi_account"]
 	doc.deductions = [row for row in doc.get("deductions") or [] if not row.get("is_exchange_gain_loss")]
 	found = {(row["reference_doctype"], row["reference_name"]): row for row in prepared["allocations"]}
 	for row in doc.get("references") or []:
@@ -405,18 +405,16 @@ def _write(doc, prepared):
 		row.reference_name = computed["reference_name"]
 		row.hero_invoice_currency = computed["invoice_currency"]
 		row.outstanding_amount = computed["outstanding_amount"]
+		row.hero_allocated_invoice_amount = computed["allocated_invoice_amount"]
+		row.hero_allocated_account_amount = computed["allocated_amount"]
 		row.allocated_amount = computed["allocated_amount"]
-		row.hero_booked_rate = computed["booked_rate"]
+		row.hero_booked_rate = computed["invoice_booked_rate"]
 		row.hero_payment_rate = computed["payment_rate"]
 		row.hero_payment_currency = prepared["bank_currency"]
 		row.hero_bank_amount = computed["payment_amount"]
 		row.exchange_rate = computed["booked_rate"]
 		row.exchange_gain_loss = 0
 	doc.flags.hero_payment = prepared
-
-
-def uses_multiple_accounts_from_prepared(doc, prepared) -> bool:
-	return spans_accounts(prepared["party_account"], [row["account"] for row in prepared["allocations"]])
 
 
 def _summary(doc):
@@ -445,6 +443,8 @@ def _summary(doc):
 				"hero_account_currency": row.hero_account_currency,
 				"hero_invoice_currency": row.hero_invoice_currency,
 				"outstanding_amount": row.outstanding_amount,
+				"hero_allocated_invoice_amount": row.hero_allocated_invoice_amount,
+				"hero_allocated_account_amount": row.hero_allocated_account_amount,
 				"allocated_amount": row.allocated_amount,
 				"hero_booked_rate": row.hero_booked_rate,
 				"hero_payment_rate": row.hero_payment_rate,
@@ -469,6 +469,41 @@ def _fill_missing_accounts(doc):
 			continue
 		account_field = _INVOICE_FIELDS[doc.party_type][2]
 		row.hero_account = frappe.db.get_value(expected, row.reference_name, account_field)
+
+
+def _fill_account_currencies(doc):
+	for row in doc.get("references") or []:
+		account = clean_text(row.get("hero_account"))
+		if not account or clean_text(row.get("hero_account_currency")):
+			continue
+		if frappe.db.exists("Account", account):
+			row.hero_account_currency = frappe.db.get_value("Account", account, "account_currency")
+
+
+def _needs_custom_allocation(doc) -> bool:
+	if uses_multiple_accounts(doc):
+		return True
+	for row in doc.get("references") or []:
+		invoice_currency = clean_text(row.get("hero_invoice_currency"))
+		account_currency = clean_text(row.get("hero_account_currency"))
+		if not invoice_currency or not account_currency or invoice_currency == account_currency:
+			continue
+		if (
+			row.get("reference_name")
+			or row.get("hero_allocated_invoice_amount")
+			or row.get("allocated_amount")
+		):
+			return True
+	return False
+
+
+def _custom_allocation(party_account, prepared) -> int:
+	rows = prepared["allocations"]
+	if spans_accounts(party_account, [row["account"] for row in rows]):
+		return 1
+	if any(row["invoice_currency"] != row["account_currency"] for row in rows):
+		return 1
+	return 0
 
 
 def _source_from_row(doc, row, defaults):
@@ -498,12 +533,20 @@ def _source_from_row(doc, row, defaults):
 		)
 	account = party_ledger(invoice["account"], doc.company, doc.party_type)
 	booked_rate, row_rate = _invoice_rates(
-		account.account_currency,
+		invoice["currency"],
 		defaults.default_currency,
 		invoice["conversion_rate"],
 		row.get("hero_payment_rate"),
 		doc.posting_date,
 	)
+	invoice_allocated = row.get("hero_allocated_invoice_amount")
+	if invoice_allocated in (None, ""):
+		invoice_allocated = allocated
+	account_exchange_rate = None
+	if account.account_currency not in (invoice["currency"], defaults.default_currency):
+		account_exchange_rate = exchange_rate(
+			account.account_currency, defaults.default_currency, doc.posting_date
+		)
 	return _keep_saved_allocation(
 		doc,
 		{
@@ -513,9 +556,11 @@ def _source_from_row(doc, row, defaults):
 			"reference_name": invoice["name"],
 			"invoice_currency": invoice["currency"],
 			"outstanding_amount": invoice["outstanding_amount"],
+			"allocated_invoice_amount": invoice_allocated,
 			"allocated_amount": allocated,
 			"booked_rate": booked_rate,
 			"payment_rate": row_rate,
+			"account_exchange_rate": account_exchange_rate,
 		},
 	)
 
@@ -619,13 +664,16 @@ def _keep_saved_allocation(doc, source):
 		return source
 	if status == 0 or clean_text(getattr(doc, "_action", None)) == "submit":
 		return source
+	raw_allocated = source.get("allocated_invoice_amount")
+	if raw_allocated in (None, ""):
+		raw_allocated = source.get("allocated_amount")
 	try:
-		allocated = float(source.get("allocated_amount") or 0)
+		allocated = float(raw_allocated or 0)
 		outstanding = float(source.get("outstanding_amount") or 0)
 	except (TypeError, ValueError):
 		return source
 	if outstanding < allocated:
-		source["outstanding_amount"] = source.get("allocated_amount")
+		source["outstanding_amount"] = raw_allocated
 	return source
 
 
@@ -669,8 +717,10 @@ def _as_payment(payment_type, prepared):
 				"hero_account_currency": row["account_currency"],
 				"hero_invoice_currency": row["invoice_currency"],
 				"outstanding_amount": row["outstanding_amount"],
+				"hero_allocated_invoice_amount": row["allocated_invoice_amount"],
+				"hero_allocated_account_amount": row["allocated_amount"],
 				"allocated_amount": row["allocated_amount"],
-				"hero_booked_rate": row["booked_rate"],
+				"hero_booked_rate": row["invoice_booked_rate"],
 				"hero_payment_rate": row["payment_rate"],
 				"hero_payment_currency": bank_currency,
 				"hero_bank_amount": row["payment_amount"],
@@ -687,7 +737,11 @@ def _fields_ready():
 		return False
 	reference_meta = frappe.get_meta("Payment Entry Reference")
 	payment_meta = frappe.get_meta("Payment Entry")
-	return reference_meta.has_field("hero_account") and payment_meta.has_field("hero_multi_account")
+	return (
+		reference_meta.has_field("hero_account")
+		and reference_meta.has_field("hero_allocated_invoice_amount")
+		and payment_meta.has_field("hero_multi_account")
+	)
 
 
 def _stored_rate(from_currency, to_currency, posting_date):
