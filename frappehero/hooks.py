@@ -37,6 +37,7 @@ doctype_js = {
 	"Payment Entry": [
 		"public/js/payment_entry_cheque.js",
 		"public/js/payment_entry_references.js",
+		"public/js/payment_entry_multi.js",
 	],
 	"Opening Invoice Creation Tool": "public/js/opening_invoice_creation_tool.js",
 }
@@ -45,6 +46,7 @@ doctype_js = {
 # Purchase Invoice. ERPNext's own class still builds Sales and Purchase.
 override_doctype_class = {
 	"Opening Invoice Creation Tool": "frappehero.finance_desk.opening_invoice.OpeningInvoiceCreationTool",
+	"Payment Entry": "frappehero.finance_desk.payment_entry.PaymentEntry",
 }
 
 after_install = "frappehero.install.after_install"
@@ -64,6 +66,7 @@ doc_events = {
 		"before_validate": [
 			"frappehero.finance_desk.payment_reference.set_invoice_currency",
 			"frappehero.finance_desk.cheque.validate_payment",
+			"frappehero.finance_desk.multi_currency_payment.apply_to_payment",
 		],
 		"validate": "frappehero.finance_desk.cheque.validate_payment",
 		"on_submit": "frappehero.finance_desk.cheque.submit_payment",
@@ -87,7 +90,8 @@ scheduler_events = {
 # Payment references also show the invoice currency and the invoice total in
 # that currency. Grand Total, Outstanding, and Allocated stay in the party
 # account currency.
-# Multi Currency Payment posts one Bank Entry across several party accounts
-# and invoice currencies. Payment Entry itself still has one party account.
+# Payment Entry allocates one bank amount across several party accounts and
+# invoice currencies. The party lines, advance, rate difference, and bank line
+# post on that Payment Entry. A payment on one account is unchanged.
 # Opening Invoice Creation Tool accepts a Credit Note upload as a return Sales
 # Invoice and a Debit Note upload as a return Purchase Invoice.

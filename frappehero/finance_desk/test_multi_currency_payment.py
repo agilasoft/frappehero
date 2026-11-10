@@ -1,15 +1,18 @@
 # Copyright (c) 2026, Agilasoft and contributors
 # For license information, please see license.txt
 
-import json
 import unittest
 from decimal import Decimal
 from pathlib import Path
 
 from frappehero.finance_desk.multi_currency_payment_logic import (
 	MultiCurrencyPaymentError,
+	header_account,
+	paid_and_received,
+	party_side_amount,
 	payment_type_for,
 	prepare_payment,
+	spans_accounts,
 )
 
 PACKAGE = Path(__file__).resolve().parent
@@ -98,6 +101,7 @@ class TestMultiCurrencyPayment(unittest.TestCase):
 		self.assertEqual(gain["cost_center"], "Main")
 		bank = result["accounts"][-1]
 		self.assertEqual(bank["account"], "Bank USD")
+		self.assertEqual(bank["account_currency"], "USD")
 		self.assertEqual(bank["credit_in_account_currency"], 892.86)
 		self.assertEqual(bank["exchange_rate"], 56)
 		self.assertEqual(bank["credit"], 50000.16)
@@ -344,24 +348,56 @@ class TestMultiCurrencyPayment(unittest.TestCase):
 		with self.assertRaises(MultiCurrencyPaymentError):
 			payment_type_for("Employee")
 
-	def test_doctype_lets_accounts_user_submit(self):
-		folder = PACKAGE / "doctype" / "hero_multi_currency_payment"
-		payload = json.loads((folder / "hero_multi_currency_payment.json").read_text())
-		child = json.loads(
-			(
-				PACKAGE / "doctype" / "hero_multi_currency_allocation" / "hero_multi_currency_allocation.json"
-			).read_text()
+	def test_one_party_account_stays_with_payment_entry(self):
+		self.assertFalse(spans_accounts("Creditors USD", ["Creditors USD"]))
+		self.assertFalse(spans_accounts("", ["Creditors USD"]))
+		self.assertTrue(spans_accounts("Creditors USD", ["Creditors USD", "Creditors PHP"]))
+		self.assertTrue(spans_accounts("Creditors PHP", ["Creditors USD"]))
+		self.assertEqual(header_account("Creditors PHP", ["Creditors USD", "Creditors PHP"]), "Creditors PHP")
+		self.assertEqual(header_account("Creditors PHP", ["Creditors USD", "Creditors EUR"]), "Creditors USD")
+		self.assertEqual(header_account("", []), "")
+		self.assertEqual(
+			party_side_amount(
+				"Creditors USD",
+				[
+					{"account": "Creditors USD", "allocated_amount": 100},
+					{"account": "Creditors EUR", "allocated_amount": 50},
+				],
+				{"account": "Creditors USD", "amount": 20},
+			),
+			120,
 		)
-		self.assertEqual(payload["name"], "Hero Multi Currency Payment")
-		self.assertTrue(payload["is_submittable"])
-		self.assertEqual(child["istable"], 1)
-		roles = {row["role"]: row for row in payload["permissions"]}
-		self.assertTrue(roles["Accounts User"]["submit"])
-		self.assertTrue(roles["Accounts User"]["cancel"])
-		self.assertNotIn("delete", roles["Accounts User"])
-		self.assertTrue(roles["Accounts Manager"]["delete"])
-		accounts = next(field for field in payload["fields"] if field["fieldname"] == "allocations")
-		self.assertEqual(accounts["options"], "Hero Multi Currency Allocation")
+		self.assertEqual(paid_and_received("Pay", 892.86, "USD", "USD", 500), (892.86, 892.86))
+		self.assertEqual(paid_and_received("Pay", 892.86, "USD", "PHP", 10000), (892.86, 10000))
+		self.assertEqual(paid_and_received("Receive", 892.86, "USD", "EUR", 200), (200, 892.86))
+
+	def test_payment_entry_owns_the_multi_currency_voucher(self):
+		hooks = (PACKAGE.parent / "hooks.py").read_text()
+		install = (PACKAGE.parent / "install.py").read_text()
+		controller = (PACKAGE / "payment_entry.py").read_text()
+		script = (PACKAGE.parent / "public" / "js" / "payment_entry_multi.js").read_text()
+		self.assertIn('"Payment Entry": "frappehero.finance_desk.payment_entry.PaymentEntry"', hooks)
+		self.assertIn("public/js/payment_entry_multi.js", hooks)
+		self.assertIn("frappehero.finance_desk.multi_currency_payment.apply_to_payment", hooks)
+		self.assertNotIn("Hero Multi Currency Payment", hooks)
+		for fieldname in (
+			"hero_multi_account",
+			"hero_account",
+			"hero_account_currency",
+			"hero_booked_rate",
+			"hero_payment_rate",
+			"hero_payment_currency",
+			"hero_bank_amount",
+		):
+			self.assertIn(f'"{fieldname}"', install)
+		self.assertIn("Hero Multi Currency Payment", install)
+		self.assertIn("def build_gl_map", controller)
+		self.assertIn("def make_gl_entries", controller)
+		self.assertNotIn("make_exchange_gain_loss_journal(", controller)
+		self.assertIn("Get Outstanding Invoices", script)
+		self.assertIn("outstanding_invoices", script)
+		self.assertFalse((PACKAGE / "doctype" / "hero_multi_currency_payment").exists())
+		self.assertFalse((PACKAGE / "doctype" / "hero_multi_currency_allocation").exists())
 
 
 if __name__ == "__main__":

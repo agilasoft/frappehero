@@ -105,15 +105,15 @@ def prepare_payment(payment, allocations, precision=2) -> dict:
 	)
 	if gain_loss:
 		accounts.append(gain_loss)
-	accounts.append(
-		_money_line(
-			bank_account,
-			paid_amount,
-			payment_rate,
-			bank_base,
-			bank_side,
-		)
+	bank_line = _money_line(
+		bank_account,
+		paid_amount,
+		payment_rate,
+		bank_base,
+		bank_side,
 	)
+	bank_line["account_currency"] = payment_currency
+	accounts.append(bank_line)
 	_require_balance(accounts, precision)
 
 	if payment_type == "Pay":
@@ -415,3 +415,50 @@ def _show(value):
 	if "." in text:
 		text = text.rstrip("0").rstrip(".")
 	return float(text) if text else 0.0
+
+
+def spans_accounts(party_account, accounts) -> bool:
+	"""True when the references are not all on the single party account."""
+	names = {clean_text(account) for account in accounts or [] if clean_text(account)}
+	if len(names) > 1:
+		return True
+	party_account = clean_text(party_account)
+	return bool(names and party_account and names != {party_account})
+
+
+def header_account(party_account, accounts):
+	"""Keep the party account when one of the rows uses it, otherwise the first row."""
+	party_account = clean_text(party_account)
+	ordered = [clean_text(account) for account in accounts or [] if clean_text(account)]
+	if party_account and party_account in ordered:
+		return party_account
+	return ordered[0] if ordered else party_account
+
+
+def party_side_amount(account, allocations, advance=None) -> float:
+	"""Invoice-currency total posted to one party account, including its advance."""
+	account = clean_text(account)
+	total = Decimal(0)
+	for row in allocations or []:
+		if clean_text((row or {}).get("account")) == account:
+			total += _decimal((row or {}).get("allocated_amount"))
+	if advance and clean_text(advance.get("account")) == account:
+		total += _decimal(advance.get("amount"))
+	return _show(total)
+
+
+def paid_and_received(payment_type, bank_amount, bank_currency, party_currency, party_amount):
+	"""Map the bank amount onto Paid Amount and Received Amount.
+
+	Those two fields are the same number when the bank and the header party
+	account share a currency, because Payment Entry rejects a received amount
+	above the paid amount in that case. Otherwise the bank field keeps the
+	bank amount and the party field keeps that account's own total.
+	"""
+	bank_amount = _show(_decimal(bank_amount))
+	party_amount = _show(_decimal(party_amount))
+	if clean_text(bank_currency) == clean_text(party_currency):
+		return bank_amount, bank_amount
+	if clean_text(payment_type) == "Pay":
+		return bank_amount, party_amount
+	return party_amount, bank_amount

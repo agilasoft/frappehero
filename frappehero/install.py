@@ -20,6 +20,14 @@ def after_install():
 
 def after_migrate():
 	ensure_custom_fields()
+	remove_retired_doctypes()
+
+
+def remove_retired_doctypes():
+	"""Drop the standalone multi-currency voucher once Payment Entry owns it."""
+	for name in ("Hero Multi Currency Payment", "Hero Multi Currency Allocation"):
+		if frappe.db.exists("DocType", name):
+			frappe.delete_doc("DocType", name, force=1, ignore_permissions=True)
 
 
 def ensure_custom_fields():
@@ -248,6 +256,16 @@ def get_custom_fields():
 				"no_copy": 1,
 				"depends_on": "eval:doc.payment_type=='Pay'",
 			},
+			{
+				"fieldname": "hero_multi_account",
+				"label": "Multiple Accounts",
+				"fieldtype": "Check",
+				"insert_after": "party",
+				"read_only": 1,
+				"no_copy": 1,
+				"default": "0",
+				"description": "Set when the references use more than one receivable or payable account. The payment still submits as a Payment Entry.",
+			},
 		],
 		"Payment Entry Reference": [
 			{
@@ -272,6 +290,67 @@ def get_custom_fields():
 				"in_list_view": 1,
 				"columns": 2,
 				"description": "Total of the reference in its own currency. Grand Total stays in the party account currency.",
+			},
+			{
+				"fieldname": "hero_account",
+				"label": "Account",
+				"fieldtype": "Link",
+				"options": "Account",
+				"insert_after": "hero_invoice_amount",
+				"in_list_view": 1,
+				"columns": 2,
+				"description": "Receivable or payable account for this invoice. It can differ from the party account on the payment.",
+			},
+			{
+				"fieldname": "hero_account_currency",
+				"label": "Account Currency",
+				"fieldtype": "Link",
+				"options": "Currency",
+				"insert_after": "hero_account",
+				"read_only": 1,
+				"no_copy": 1,
+			},
+			{
+				"fieldname": "hero_booked_rate",
+				"label": "Booked Rate",
+				"fieldtype": "Float",
+				"precision": "9",
+				"insert_after": "hero_account_currency",
+				"read_only": 1,
+				"no_copy": 1,
+				"description": "Invoice conversion rate. The party line posts at this rate.",
+			},
+			{
+				"fieldname": "hero_payment_rate",
+				"label": "Payment Rate",
+				"fieldtype": "Float",
+				"precision": "9",
+				"insert_after": "hero_booked_rate",
+				"in_list_view": 1,
+				"columns": 1,
+				"description": "Company currency for one unit of the account currency on the posting date. This turns the invoice into the bank amount.",
+			},
+			{
+				"fieldname": "hero_payment_currency",
+				"label": "Payment Currency",
+				"fieldtype": "Link",
+				"options": "Currency",
+				"insert_after": "hero_payment_rate",
+				"read_only": 1,
+				"hidden": 1,
+				"no_copy": 1,
+			},
+			{
+				"fieldname": "hero_bank_amount",
+				"label": "Bank Amount",
+				"fieldtype": "Currency",
+				"options": "hero_payment_currency",
+				"insert_after": "hero_payment_currency",
+				"read_only": 1,
+				"no_copy": 1,
+				"in_list_view": 1,
+				"columns": 2,
+				"description": "Share of the bank amount for this invoice.",
 			},
 		],
 		"Opening Invoice Creation Tool Item": [
