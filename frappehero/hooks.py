@@ -1,7 +1,7 @@
 app_name = "frappehero"
 app_title = "Frappe Hero"
 app_publisher = "Agilasoft"
-app_description = "Group users and the documents they may use, map accounts, and review access, defaults, shares, dimensions, tax, opening entries, credit notes, debit notes, invoice disputes, BSP exchange rates, and cheque leaves."
+app_description = "Group users and the documents they may use, map accounts, and review access, defaults, shares, dimensions, tax, opening entries, credit notes, debit notes, invoice disputes, multi-currency payments, BSP exchange rates, and cheque leaves."
 app_email = "dev@agilasoft.com"
 app_license = "mit"
 
@@ -87,5 +87,7 @@ scheduler_events = {
 # Payment references also show the invoice currency and the invoice total in
 # that currency. Grand Total, Outstanding, and Allocated stay in the party
 # account currency.
+# Multi Currency Payment posts one Bank Entry across several party accounts
+# and invoice currencies. Payment Entry itself still has one party account.
 # Opening Invoice Creation Tool accepts a Credit Note upload as a return Sales
 # Invoice and a Debit Note upload as a return Purchase Invoice.
