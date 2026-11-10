@@ -141,10 +141,10 @@ def prepare_payment(payment, allocations, precision=2) -> dict:
 
 def _allocation_row(source, party_type, payment_currency, company_currency, payment_rate, precision):
 	source = source or {}
-	allocated = _amount(source.get("allocated_amount"), precision)
 	reference_name = clean_text(source.get("reference_name"))
 	reference_doctype = clean_text(source.get("reference_doctype"))
-	if allocated == 0 and not reference_name and not reference_doctype:
+	invoice_amount = _invoice_allocation(source, precision)
+	if invoice_amount == 0 and not reference_name and not reference_doctype:
 		return None
 	expected = _PARTY_REFERENCE[party_type]
 	label = f"{reference_doctype or 'Invoice'} {reference_name}".strip()
@@ -155,16 +155,16 @@ def _allocation_row(source, party_type, payment_currency, company_currency, paym
 		raise MultiCurrencyPaymentError(
 			f"A {kind} allocates {expected}s. {reference_name} is a {reference_doctype}."
 		)
-	if allocated == 0:
+	outstanding = _amount(source.get("outstanding_amount"), precision)
+	if invoice_amount == 0:
 		raise MultiCurrencyPaymentError(
 			f"Enter the allocated amount for {reference_doctype} {reference_name}."
 		)
-	if allocated < 0:
+	if invoice_amount < 0:
 		raise MultiCurrencyPaymentError(
 			f"Allocated amount for {reference_doctype} {reference_name} cannot be negative."
 		)
-	outstanding = _amount(source.get("outstanding_amount"), precision)
-	if allocated > outstanding:
+	if invoice_amount > outstanding:
 		raise MultiCurrencyPaymentError(
 			f"Allocated amount for {reference_doctype} {reference_name} cannot be greater than "
 			f"outstanding {_show(outstanding)}."
@@ -180,21 +180,26 @@ def _allocation_row(source, party_type, payment_currency, company_currency, paym
 		raise MultiCurrencyPaymentError(
 			f"{reference_doctype} {reference_name} needs an account currency and an invoice currency."
 		)
-	if account_currency != invoice_currency:
-		raise MultiCurrencyPaymentError(
-			f"{reference_doctype} {reference_name} is in {invoice_currency}, but {account} is in "
-			f"{account_currency}. The account currency has to match the invoice currency."
-		)
-	if account_currency == company_currency:
-		booked_rate = Decimal(1)
-		row_rate = Decimal(1)
+	if invoice_currency == company_currency:
+		invoice_booked_rate = Decimal(1)
+		invoice_payment_rate = Decimal(1)
 	else:
-		booked_rate = _rate(source.get("booked_rate"), f"the booked rate on {reference_name}")
-		row_rate = _rate(source.get("payment_rate"), f"the payment rate on {reference_name}")
-	booked_base = _quantize(allocated * booked_rate, precision)
-	payment_base = _quantize(allocated * row_rate, precision)
-	if account_currency == payment_currency:
-		bank_amount = allocated
+		invoice_booked_rate = _rate(source.get("booked_rate"), f"the booked rate on {reference_name}")
+		invoice_payment_rate = _rate(source.get("payment_rate"), f"the payment rate on {reference_name}")
+	account_amount, account_rate = _account_allocation(
+		invoice_amount,
+		invoice_currency,
+		account_currency,
+		company_currency,
+		invoice_booked_rate,
+		source.get("account_exchange_rate"),
+		reference_name,
+		precision,
+	)
+	booked_base = _quantize(account_amount * account_rate, precision)
+	payment_base = _quantize(invoice_amount * invoice_payment_rate, precision)
+	if invoice_currency == payment_currency:
+		bank_amount = invoice_amount
 	else:
 		bank_amount = _quantize(payment_base / payment_rate, precision)
 	return {
@@ -204,13 +209,53 @@ def _allocation_row(source, party_type, payment_currency, company_currency, paym
 		"reference_name": reference_name,
 		"invoice_currency": invoice_currency,
 		"outstanding_amount": outstanding,
-		"allocated_amount": allocated,
-		"booked_rate": booked_rate,
-		"payment_rate": row_rate,
+		"allocated_invoice_amount": invoice_amount,
+		"allocated_amount": account_amount,
+		"booked_rate": account_rate,
+		"invoice_booked_rate": invoice_booked_rate,
+		"payment_rate": invoice_payment_rate,
 		"booked_base_dec": booked_base,
 		"payment_base_dec": payment_base,
 		"payment_amount_dec": bank_amount,
 	}
+
+
+def _invoice_allocation(source, precision):
+	"""Amount being paid, in the invoice currency.
+
+	``allocated_invoice_amount`` is that figure. A blank value falls back to
+	``allocated_amount``, which is the same number when the account uses the
+	invoice currency.
+	"""
+	raw = source.get("allocated_invoice_amount", None)
+	if raw is None or raw is False or (isinstance(raw, str) and not raw.strip()):
+		raw = source.get("allocated_amount")
+	return _amount(raw, precision)
+
+
+def _account_allocation(
+	invoice_amount,
+	invoice_currency,
+	account_currency,
+	company_currency,
+	invoice_booked_rate,
+	account_exchange_rate,
+	reference_name,
+	precision,
+):
+	"""Turn an invoice-currency allocation into the account-currency amount and its rate."""
+	if account_currency == invoice_currency:
+		return invoice_amount, invoice_booked_rate
+	if account_currency == company_currency:
+		return _quantize(invoice_amount * invoice_booked_rate, precision), Decimal(1)
+	account_rate = _rate(account_exchange_rate, f"the account on {reference_name}")
+	invoice_base = _quantize(invoice_amount * invoice_booked_rate, precision)
+	account_amount = _quantize(invoice_base / account_rate, precision)
+	if account_amount <= 0:
+		raise MultiCurrencyPaymentError(
+			f"The allocated amount for {reference_name} is too small to post in {account_currency}."
+		)
+	return account_amount, account_rate
 
 
 def _paid_amount(payment, allocated_amount, payment_currency, precision):
@@ -344,8 +389,10 @@ def _public_row(row):
 		"reference_name": row["reference_name"],
 		"invoice_currency": row["invoice_currency"],
 		"outstanding_amount": _show(row["outstanding_amount"]),
+		"allocated_invoice_amount": _show(row["allocated_invoice_amount"]),
 		"allocated_amount": _show(row["allocated_amount"]),
 		"booked_rate": _show(row["booked_rate"]),
+		"invoice_booked_rate": _show(row["invoice_booked_rate"]),
 		"payment_rate": _show(row["payment_rate"]),
 		"booked_base": _show(row["booked_base_dec"]),
 		"payment_base": _show(row["payment_base_dec"]),
