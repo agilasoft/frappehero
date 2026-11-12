@@ -17,6 +17,7 @@ from frappehero.finance_desk.receivable_repair_logic import (
 	MULTI,
 	ReceivableRepairError,
 	check_accounts,
+	outstanding_matches,
 	party_account_choice,
 	plan_repair,
 	selection_matches,
@@ -438,6 +439,9 @@ def _write_payment(payment):
 	if payment["mode"] == MULTI:
 		_write_multi_payment(payment)
 		return
+	if payment.get("keep_amounts"):
+		_write_same_currency_payment(payment)
+		return
 	allocated_total = flt(payment["party_amount"]) - flt(payment.get("unallocated_amount"))
 	values = {
 		payment["party_account_field"]: payment["party_account"],
@@ -466,6 +470,23 @@ def _write_payment(payment):
 		_write_reference(reference, multi=False)
 
 
+def _write_same_currency_payment(payment):
+	"""Change the receivable and leave the submitted amounts in place.
+
+	The party currency is unchanged, so the existing party and bank amounts
+	already balance.
+	"""
+	values = {
+		payment["party_account_field"]: payment["party_account"],
+		payment["party_currency_field"]: payment["party_account_currency"],
+	}
+	if frappe.get_meta("Payment Entry").has_field("hero_multi_account"):
+		values["hero_multi_account"] = 0
+	frappe.db.set_value("Payment Entry", payment["name"], values, update_modified=True)
+	for reference in payment["references"]:
+		_write_reference(reference, multi=False, accounts_only=True)
+
+
 def _write_multi_payment(payment):
 	if frappe.get_meta("Payment Entry").has_field("hero_multi_account"):
 		frappe.db.set_value("Payment Entry", payment["name"], {"hero_multi_account": 1}, update_modified=True)
@@ -480,23 +501,36 @@ def _write_multi_payment(payment):
 			frappe.db.delete("Payment Entry Deduction", {"name": name})
 
 
-def _write_reference(reference, multi):
+def _write_reference(reference, multi, accounts_only=False):
 	if not reference.get("row_name"):
+		return
+	meta = frappe.get_meta("Payment Entry Reference")
+	if accounts_only:
+		values = {}
+		for field, value in (
+			("hero_account", reference["account"]),
+			("hero_account_currency", reference["account_currency"]),
+		):
+			if meta.has_field(field):
+				values[field] = value
+		if values:
+			frappe.db.set_value(
+				"Payment Entry Reference", reference["row_name"], values, update_modified=True
+			)
 		return
 	values = {
 		"allocated_amount": reference["allocated_amount"],
 		"exchange_rate": reference["exchange_rate"],
 	}
-	meta = frappe.get_meta("Payment Entry Reference")
 	optional = {
 		"hero_account": reference["account"],
 		"hero_account_currency": reference["account_currency"],
 		"hero_invoice_currency": reference["invoice_currency"],
 		"hero_allocated_invoice_amount": reference["invoice_amount"],
 		"hero_allocated_account_amount": reference["allocated_amount"],
+		"hero_payment_rate": reference.get("payment_rate") or reference["exchange_rate"],
+		"hero_booked_rate": reference.get("payment_rate") or reference["exchange_rate"],
 	}
-	if not multi:
-		optional["hero_account"] = reference["account"]
 	for field, value in optional.items():
 		if meta.has_field(field):
 			values[field] = value
@@ -558,9 +592,18 @@ def _mismatch(plan, chain) -> str:
 	invoices = {row["name"]: row for row in plan["invoices"]}
 	payments = {row["name"]: row for row in plan["payments"]}
 	for name in chain["invoices"]:
+		invoice = invoices[name]
 		current = flt(frappe.db.get_value("Sales Invoice", name, "outstanding_amount"))
-		expected = flt(invoices[name]["outstanding_amount"])
-		if abs(current - expected) > 0.01:
+		expected = flt(invoice["outstanding_amount"])
+		if not outstanding_matches(
+			expected,
+			current,
+			invoice.get("party_account_currency"),
+			invoice.get("account_currency"),
+			invoice.get("currency"),
+			invoice.get("conversion_rate"),
+			plan.get("company_currency"),
+		):
 			return _("Outstanding on {0} would change from {1} to {2}.").format(name, expected, current)
 	for name in chain["payments"]:
 		current = _bank_amount(name)

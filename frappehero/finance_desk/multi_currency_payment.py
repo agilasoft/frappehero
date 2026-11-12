@@ -545,15 +545,16 @@ def _source_from_row(doc, row, defaults):
 			_("{0} {1} is on {2}, not {3}.").format(expected, reference_name, invoice["account"], chosen)
 		)
 	account = party_ledger(invoice["account"], doc.company, doc.party_type)
+	saved_booked = _positive(row.get("hero_booked_rate"))
 	booked_rate, row_rate = _invoice_rates(
 		invoice["currency"],
 		defaults.default_currency,
-		invoice["conversion_rate"],
+		saved_booked or invoice["conversion_rate"],
 		row.get("hero_payment_rate"),
 		doc.posting_date,
 	)
 	invoice_allocated = row.get("hero_allocated_invoice_amount")
-	if invoice_allocated in (None, ""):
+	if not _positive(invoice_allocated):
 		invoice_allocated = allocated
 	account_exchange_rate = None
 	if account.account_currency not in (invoice["currency"], defaults.default_currency):
