@@ -276,6 +276,7 @@ def _prepare(doc):
 		frappe.throw(_("Allocate at least one invoice."))
 	chosen = header_account(party_account_on(doc), [row["account"] for row in sources])
 	bank_paid = doc.get("paid_amount") if doc.payment_type == "Pay" else doc.get("received_amount")
+	advance_account = clean_text(getattr(doc.flags, "hero_repair_advance_account", ""))
 	return _result(
 		doc.party_type,
 		doc.party,
@@ -289,6 +290,7 @@ def _prepare(doc):
 		bank_paid,
 		bank_rate,
 		doc.get("cost_center"),
+		advance_account,
 	)
 
 
@@ -305,11 +307,22 @@ def _result(
 	bank_paid,
 	bank_rate,
 	cost_center=None,
+	advance_account_name=None,
 ):
 	account = party_ledger(party_account_name, company, party_type)
 	party_rate = 1
 	if account.account_currency != defaults.default_currency:
 		party_rate = exchange_rate(account.account_currency, defaults.default_currency, posting_date)
+	advance_ledger = account
+	advance_rate = party_rate
+	advance_name = clean_text(advance_account_name)
+	if advance_name and advance_name != account.name:
+		advance_ledger = party_ledger(advance_name, company, party_type)
+		advance_rate = 1
+		if advance_ledger.account_currency != defaults.default_currency:
+			advance_rate = exchange_rate(
+				advance_ledger.account_currency, defaults.default_currency, posting_date
+			)
 	paid = None if bank_paid in (None, "", 0) else bank_paid
 	try:
 		prepared = prepare_payment(
@@ -321,9 +334,9 @@ def _result(
 				"payment_exchange_rate": bank_rate,
 				"paid_amount": paid,
 				"bank_account": bank.name,
-				"advance_account": account.name,
-				"advance_account_currency": account.account_currency,
-				"advance_exchange_rate": party_rate,
+				"advance_account": advance_ledger.name,
+				"advance_account_currency": advance_ledger.account_currency,
+				"advance_exchange_rate": advance_rate,
 				"gain_loss_account": defaults.get("exchange_gain_loss_account"),
 				"cost_center": cost_center or defaults.get("cost_center"),
 			},
