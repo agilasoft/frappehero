@@ -7,6 +7,7 @@ from frappehero.finance_desk.receivable_repair_logic import (
 	ReceivableRepairError,
 	account_for_currency,
 	check_accounts,
+	outstanding_matches,
 	party_account_choice,
 	plan_repair,
 	selection_matches,
@@ -146,6 +147,8 @@ class TestRepairPlan(unittest.TestCase):
 		self.assertEqual(payment["party_exchange_rate"], 56)
 		self.assertEqual(payment["references"][0]["allocated_amount"], 60)
 		self.assertEqual(payment["references"][0]["invoice_amount"], 60)
+		self.assertEqual(payment["references"][0]["exchange_rate"], 56)
+		self.assertEqual(payment["keep_amounts"], 0)
 
 	def test_other_currency_changes_the_account_and_keeps_the_amount(self):
 		plan = plan_repair(
@@ -165,6 +168,8 @@ class TestRepairPlan(unittest.TestCase):
 		self.assertEqual(payment["party_amount"], 20)
 		self.assertEqual(payment["bank_amount"], 100)
 		self.assertEqual(payment["party_exchange_rate"], 1)
+		self.assertEqual(payment["keep_amounts"], 1)
+		self.assertEqual(payment["references"][0]["allocated_amount"], 20)
 
 	def test_credit_note_keeps_its_return_link(self):
 		plan = plan_repair(
@@ -352,6 +357,39 @@ class TestRepairPlan(unittest.TestCase):
 		)
 		self.assertTrue(selection_matches(plan["signature"], plan))
 		self.assertFalse(selection_matches({"invoices": ["SI-A"], "payments": []}, plan))
+
+	def test_a_zero_hero_amount_is_an_empty_field(self):
+		plan = plan_repair(
+			COMPANY,
+			WRONG,
+			USD_ACCOUNT,
+			OTHER,
+			"PHP",
+			[_invoice("SI-USD", "USD", outstanding=40, rate=56)],
+			[
+				_payment(
+					"PE-USD",
+					[_reference("SI-USD", 3360, rate=1, hero=0)],
+					paid_amount=3360,
+					received_amount=3360,
+					base_paid_amount=3360,
+					base_received_amount=3360,
+				)
+			],
+		)
+		payment = plan["payments"][0]
+		self.assertEqual(payment["party_amount"], 60)
+		self.assertEqual(payment["party_exchange_rate"], 56)
+		self.assertEqual(payment["references"][0]["allocated_amount"], 60)
+		self.assertEqual(payment["references"][0]["invoice_amount"], 60)
+		self.assertEqual(payment["base_party_amount"], 3360)
+
+	def test_outstanding_follows_the_invoice_when_the_receivable_currency_changes(self):
+		self.assertTrue(outstanding_matches(5600, 100, "PHP", "USD", "USD", 56, "PHP"))
+		self.assertTrue(outstanding_matches(0, 0, "PHP", "USD", "USD", 56, "PHP"))
+		self.assertTrue(outstanding_matches(100, 100, "PHP", "PHP", "PHP", 1, "PHP"))
+		self.assertFalse(outstanding_matches(5600, 100, "PHP", "PHP", "USD", 56, "PHP"))
+		self.assertFalse(outstanding_matches(5600, 90, "PHP", "USD", "USD", 56, "PHP"))
 
 	def test_hero_amount_is_the_invoice_allocation(self):
 		plan = plan_repair(

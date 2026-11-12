@@ -159,6 +159,41 @@ def selection_matches(expected, plan) -> bool:
 	) == list(signature.get("payments") or [])
 
 
+def outstanding_matches(
+	previous,
+	current,
+	previous_currency,
+	current_currency,
+	invoice_currency,
+	conversion_rate,
+	company_currency,
+) -> bool:
+	"""True when the invoice-currency balance is unchanged.
+
+	The stored outstanding follows the receivable's currency. Moving a USD
+	invoice off a company-currency receivable rewrites that number from the
+	company amount into USD. The invoice-currency balance is the same.
+	"""
+	previous_amount = _money(previous)
+	current_amount = _money(current)
+	previous_currency = clean_text(previous_currency).upper()
+	current_currency = clean_text(current_currency).upper()
+	invoice_currency = clean_text(invoice_currency).upper()
+	company_currency = clean_text(company_currency).upper()
+	if previous_currency == current_currency or not previous_currency or not current_currency:
+		return abs(previous_amount - current_amount) <= Decimal("0.01")
+	rate = _money(conversion_rate, 9)
+	if not rate:
+		return abs(previous_amount - current_amount) <= Decimal("0.01")
+	if previous_currency == company_currency and current_currency == invoice_currency:
+		expected = _money(previous_amount / rate)
+	elif previous_currency == invoice_currency and current_currency == company_currency:
+		expected = _money(previous_amount * rate)
+	else:
+		return abs(previous_amount - current_amount) <= Decimal("0.01")
+	return abs(expected - current_amount) <= Decimal("0.05")
+
+
 def _account_error(errors, accounts, name, company, label, currency):
 	if not name:
 		return
@@ -378,8 +413,9 @@ def _described_reference(reference, invoice, allocated, company_currency):
 		account = clean_text(invoice.get("debit_to"))
 		account_currency = clean_text(invoice.get("party_account_currency")).upper()
 		account_amount = allocated
-	conversion = _money(invoice.get("conversion_rate"), 9)
-	exchange = conversion if invoice_currency and invoice_currency != company_currency else Decimal(1)
+	payment_rate = Decimal(1)
+	if invoice_amount and invoice_currency and invoice_currency != company_currency:
+		payment_rate = _money(allocated / invoice_amount, 9) or Decimal(1)
 	return {
 		"row_name": clean_text(reference.get("row_name") or reference.get("name")),
 		"reference_doctype": SALES_INVOICE,
@@ -390,14 +426,16 @@ def _described_reference(reference, invoice, allocated, company_currency):
 		"invoice_currency": invoice_currency,
 		"invoice_amount": _show(invoice_amount),
 		"allocated_amount": _show(account_amount),
-		"exchange_rate": _show(exchange if exchange else Decimal(1)),
+		"exchange_rate": _show(payment_rate),
+		"payment_rate": _show(payment_rate),
 	}
 
 
 def _invoice_allocation(reference, invoice, allocated, company_currency):
-	hero = reference.get("hero_allocated_invoice_amount")
-	if hero not in (None, ""):
-		return _money(hero)
+	# Currency fields default to 0. That 0 is an empty allocation, not a real one.
+	hero = _stored_allocation(reference.get("hero_allocated_invoice_amount"))
+	if hero is not None:
+		return hero
 	invoice_currency = clean_text(invoice.get("currency")).upper()
 	account_currency = clean_text(
 		reference.get("account_currency")
@@ -415,6 +453,18 @@ def _invoice_allocation(reference, invoice, allocated, company_currency):
 	if rate:
 		return _money(allocated / rate)
 	return allocated
+
+
+def _stored_allocation(value):
+	"""Invoice-currency amount saved on the row, or None when it was never entered."""
+	if value in (None, "", False):
+		return None
+	if isinstance(value, str) and not value.strip():
+		return None
+	amount = _money(value)
+	if amount == 0:
+		return None
+	return amount
 
 
 def _account_amount(invoice_amount, invoice_currency, account_currency, conversion_rate, company_currency):
@@ -441,7 +491,7 @@ def _single_header(source, payment_type, references, company_currency, unallocat
 				(
 					_money(row["invoice_amount"])
 					* (
-						_money(row["exchange_rate"], 9)
+						_money(row.get("payment_rate") or row["exchange_rate"], 9)
 						if row["invoice_currency"] != company_currency
 						else Decimal(1)
 					)
@@ -455,7 +505,12 @@ def _single_header(source, payment_type, references, company_currency, unallocat
 	if currency == company_currency or not party_amount:
 		rate = Decimal(1)
 	else:
-		rate = _money(base / party_amount, 9)
+		rate = _money(base / party_amount, 9) or Decimal(1)
+	# ERPNext books exchange gain from allocated times this rate versus the row rate.
+	# The same rate on every row keeps that gain at zero and the voucher balanced.
+	shown_rate = _show(rate)
+	for row in references:
+		row["exchange_rate"] = shown_rate
 	amount_field, rate_field = _amount_fields(payment_type)
 	_, _, party_field = _party_fields(source, payment_type)
 	return {
@@ -468,6 +523,7 @@ def _single_header(source, payment_type, references, company_currency, unallocat
 		"party_currency_field": _currency_field(payment_type),
 		"party_amount_field": amount_field,
 		"party_rate_field": rate_field,
+		"keep_amounts": 1 if currency == party_currency else 0,
 	}
 
 
@@ -482,6 +538,7 @@ def _multi_header(references, party_currency):
 		"party_currency_field": "",
 		"party_amount_field": "",
 		"party_rate_field": "",
+		"keep_amounts": 0,
 	}
 
 
