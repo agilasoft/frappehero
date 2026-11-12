@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+	<meta name="theme-color" content="#0a4f86">
+	<meta name="mobile-web-app-capable" content="yes">
+	<meta name="apple-mobile-web-app-capable" content="yes">
+	<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+	<meta name="apple-mobile-web-app-title" content="Proof">
+	<title>Proof of Payment</title>
+	<link rel="manifest" href="/assets/frappehero/proof-app.webmanifest">
+	<link rel="stylesheet" href="/assets/frappehero/css/proof_app.css">
+</head>
+<body>
+	{% if permitted %}
+	<div id="app" class="app">
+		<header class="top">
+			<p class="eyebrow">Frappe Hero</p>
+			<h1>Proof of Payment</h1>
+		</header>
+		<main class="sheet">
+			<section id="home">
+				<form id="lookup-form" class="search-card">
+					<label class="field" for="payment-id">Payment Entry</label>
+					<input id="payment-id" class="id-input" type="text" name="payment" autocomplete="off" autocapitalize="characters" enterkeyhint="search" placeholder="Payment Entry ID">
+					<div class="actions">
+						<button type="submit" class="btn primary" data-action="lookup">Look up</button>
+						<button type="button" class="btn ghost" data-action="scan">Scan</button>
+					</div>
+				</form>
+				<section class="pending-block" aria-labelledby="pending-title">
+					<h2 id="pending-title">Pending upload</h2>
+					<div id="pending"></div>
+				</section>
+			</section>
+			<section id="detail" hidden>
+				<div id="detail-body"></div>
+				<div id="detail-dock" class="dock"></div>
+			</section>
+		</main>
+		<div id="camera" class="camera" hidden>
+			<p class="camera-hint">Point the camera at the Payment Entry code.</p>
+			<video playsinline autoplay muted></video>
+			<button type="button" class="btn ghost" data-action="close-scan">Close camera</button>
+		</div>
+		<p id="toast" class="toast" role="status" hidden></p>
+		<input id="photo-input" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" capture="environment" hidden>
+		<input id="file-input" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" hidden>
+	</div>
+	<script>
+		window.PROOF_APP = {{ {
+			"csrf": csrf_token,
+			"permitted": permitted,
+			"dateFormat": date_format,
+			"user": user
+		} | tojson }};
+	</script>
+	<script src="/assets/frappehero/js/proof_app.js"></script>
+	{% else %}
+	<main class="app denied">
+		<h1>Proof of Payment</h1>
+		<p>Your account cannot open this page. Ask an Accounts Manager if you need it.</p>
+	</main>
+	{% endif %}
+</body>
+</html>
