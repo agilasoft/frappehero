@@ -214,6 +214,41 @@ class TestRepairPlan(unittest.TestCase):
 		self.assertEqual({row["account"] for row in payment["references"]}, {USD_ACCOUNT, OTHER})
 		self.assertEqual(plan["counts"]["move_payments"], 1)
 
+	def test_usd_invoice_already_on_its_receivable_keeps_the_booked_rate(self):
+		plan = plan_repair(
+			COMPANY,
+			WRONG,
+			USD_ACCOUNT,
+			OTHER,
+			"PHP",
+			[
+				_invoice("SI-PHP", "PHP"),
+				_invoice(
+					"SI-USD",
+					"USD",
+					outstanding=60,
+					rate=56,
+					debit_to=USD_ACCOUNT,
+					party_account_currency="USD",
+				),
+			],
+			[
+				_payment(
+					"PE-MIX",
+					[_reference("SI-PHP", 100), _reference("SI-USD", 60, rate=1)],
+					received_amount=3460,
+					paid_amount=3460,
+					base_paid_amount=3460,
+				)
+			],
+		)
+		payment = plan["payments"][0]
+		self.assertEqual(payment["mode"], "multi")
+		usd = next(row for row in payment["references"] if row["reference_name"] == "SI-USD")
+		self.assertEqual(usd["allocated_amount"], 60)
+		self.assertEqual(usd["payment_rate"], 56)
+		self.assertEqual(usd["exchange_rate"], 56)
+
 	def test_unallocated_advance_stays_on_the_old_account(self):
 		plan = plan_repair(
 			COMPANY,

@@ -413,9 +413,20 @@ def _described_reference(reference, invoice, allocated, company_currency):
 		account = clean_text(invoice.get("debit_to"))
 		account_currency = clean_text(invoice.get("party_account_currency")).upper()
 		account_amount = allocated
-	payment_rate = Decimal(1)
-	if invoice_amount and invoice_currency and invoice_currency != company_currency:
-		payment_rate = _money(allocated / invoice_amount, 9) or Decimal(1)
+	source_currency = clean_text(
+		reference.get("account_currency")
+		or invoice.get("party_account_currency")
+		or invoice.get("account_currency")
+	).upper()
+	payment_rate = _company_rate(
+		allocated,
+		invoice_amount,
+		invoice_currency,
+		source_currency,
+		reference.get("exchange_rate"),
+		invoice.get("conversion_rate"),
+		company_currency,
+	)
 	return {
 		"row_name": clean_text(reference.get("row_name") or reference.get("name")),
 		"reference_doctype": SALES_INVOICE,
@@ -453,6 +464,32 @@ def _invoice_allocation(reference, invoice, allocated, company_currency):
 	if rate:
 		return _money(allocated / rate)
 	return allocated
+
+
+def _company_rate(
+	allocated,
+	invoice_amount,
+	invoice_currency,
+	source_currency,
+	exchange_rate,
+	conversion_rate,
+	company_currency,
+):
+	"""Company currency for one unit of the invoice currency.
+
+	A company-currency receivable stores the allocation in company currency, so
+	the rate is that amount divided by the invoice amount. A foreign receivable
+	already stores the invoice amount, and dividing it by itself would book 1.
+	"""
+	if not invoice_currency or invoice_currency == company_currency or not invoice_amount:
+		return Decimal(1)
+	if source_currency == company_currency:
+		return _money(allocated / invoice_amount, 9) or Decimal(1)
+	booked = _money(exchange_rate, 9)
+	conversion = _money(conversion_rate, 9)
+	if booked and booked != 1:
+		return booked
+	return conversion or booked or Decimal(1)
 
 
 def _stored_allocation(value):
