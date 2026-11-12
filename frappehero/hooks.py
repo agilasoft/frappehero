@@ -1,7 +1,7 @@
 app_name = "frappehero"
 app_title = "Frappe Hero"
 app_publisher = "Agilasoft"
-app_description = "Group users and the documents they may use, map accounts, and review access, defaults, shares, dimensions, tax, opening entries, credit notes, debit notes, invoice disputes, multi-currency payments, BSP exchange rates, cheque leaves, and proof of payment."
+app_description = "Group users and the documents they may use, map accounts, and review access, defaults, shares, dimensions, tax, opening entries, credit notes, debit notes, receivable repair, invoice disputes, multi-currency payments, BSP exchange rates, cheque leaves, and proof of payment."
 app_email = "dev@agilasoft.com"
 app_license = "mit"
 

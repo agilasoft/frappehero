@@ -23,6 +23,12 @@ from frappehero.finance_desk.logic import (
 	parse_trial_balance,
 	summarize_dimensions,
 )
+from frappehero.finance_desk.receivable_repair import (
+	apply_defaults,
+	apply_repair,
+	preview_defaults,
+	preview_repair,
+)
 from frappehero.flags import as_flag, clean_text, parse_payload
 
 
@@ -533,6 +539,51 @@ def _write_rates(rows) -> tuple[int, int]:
 			doc.save(ignore_permissions=True)
 			updated += 1
 	return created, updated
+
+
+@frappe.whitelist()
+def preview_receivable_repair(
+	company: str | None = None,
+	wrong_account: str | None = None,
+	usd_account: str | None = None,
+	other_account: str | None = None,
+) -> dict:
+	_finance()
+	return preview_repair(company, wrong_account, usd_account, other_account)
+
+
+@frappe.whitelist()
+def apply_receivable_repair(
+	company: str | None = None,
+	wrong_account: str | None = None,
+	usd_account: str | None = None,
+	other_account: str | None = None,
+	signature: str | dict | None = None,
+) -> dict:
+	_finance()
+	return apply_repair(company, wrong_account, usd_account, other_account, signature)
+
+
+@frappe.whitelist()
+def preview_receivable_defaults(
+	company: str | None = None,
+	wrong_account: str | None = None,
+	usd_account: str | None = None,
+	other_account: str | None = None,
+) -> dict:
+	_finance()
+	return preview_defaults(company, wrong_account, usd_account, other_account)
+
+
+@frappe.whitelist()
+def apply_receivable_defaults(
+	company: str | None = None,
+	wrong_account: str | None = None,
+	usd_account: str | None = None,
+	other_account: str | None = None,
+) -> dict:
+	_finance()
+	return apply_defaults(company, wrong_account, usd_account, other_account)
 
 
 def _batch_summary(doc, include_lines: bool) -> dict:
