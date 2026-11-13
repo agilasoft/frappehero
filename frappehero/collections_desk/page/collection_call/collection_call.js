@@ -36,25 +36,27 @@ frappehero.CollectionCall = class CollectionCall {
 		this.page.main.addClass("fh-page");
 		this.page.main.html(`
 			<div class="fh-app fh-call">
-				<div class="fh-filters">
+				<div class="fh-call-bar">
 					<input type="search" class="fh-search" placeholder="${__("Search customer, group, outcome")}">
 					<div class="fh-company"></div>
-					<label class="fh-check"><input type="checkbox" class="fh-overdue"> ${__("Overdue")}</label>
-					<label class="fh-check"><input type="checkbox" class="fh-follow"> ${__("Follow-ups due")}</label>
-					<label class="fh-check"><input type="checkbox" class="fh-mine"> ${__("My calls")}</label>
+					<div class="fh-call-checks">
+						<label class="fh-check"><input type="checkbox" class="fh-overdue"> ${__("Overdue")}</label>
+						<label class="fh-check"><input type="checkbox" class="fh-follow"> ${__("Follow-ups due")}</label>
+						<label class="fh-check"><input type="checkbox" class="fh-mine"> ${__("My calls")}</label>
+					</div>
 				</div>
-				<div class="fh-stats"></div>
+				<div class="fh-call-summary"></div>
 				<div class="fh-call-grid">
-					<aside class="fh-list"></aside>
-					<section class="fh-detail fh-client"></section>
-					<section class="fh-composer"></section>
+					<aside class="fh-call-queue"></aside>
+					<section class="fh-call-file"></section>
+					<section class="fh-call-log"></section>
 				</div>
 			</div>
 		`);
-		this.listEl = this.page.main.find(".fh-list");
-		this.clientEl = this.page.main.find(".fh-client");
-		this.composerEl = this.page.main.find(".fh-composer");
-		this.statsEl = this.page.main.find(".fh-stats");
+		this.listEl = this.page.main.find(".fh-call-queue");
+		this.clientEl = this.page.main.find(".fh-call-file");
+		this.composerEl = this.page.main.find(".fh-call-log");
+		this.statsEl = this.page.main.find(".fh-call-summary");
 		this.companyControl = frappe.ui.form.make_control({
 			parent: this.page.main.find(".fh-company"),
 			df: {
@@ -185,21 +187,31 @@ frappehero.CollectionCall = class CollectionCall {
 
 	renderQueue() {
 		const summary = this.summary || {};
-		this.statsEl.html(`
-			<div class="fh-stat"><b>${summary.customers || 0}</b><span>${__("To call")}</span></div>
-			<div class="fh-stat"><b>${this.money(summary.amount_due)}</b><span>${__("Amount due")}</span></div>
-			<div class="fh-stat"><b>${summary.promises_due || 0}</b><span>${__("Promises due")}</span></div>
-			<div class="fh-stat"><b>${summary.calls_today || 0}</b><span>${__("Calls today")}</span></div>
-		`);
+		this.statsEl.html(
+			[
+				[summary.customers || 0, __("To call")],
+				[this.money(summary.amount_due), __("Amount due")],
+				[summary.promises_due || 0, __("Promises due")],
+				[summary.calls_today || 0, __("Calls today")],
+			]
+				.map(
+					([value, label]) =>
+						`<div class="fh-call-figure"><b>${frappehero.esc(value)}</b><span>${frappehero.esc(label)}</span></div>`
+				)
+				.join("")
+		);
 		this.listEl.html(
 			(this.rows || [])
 				.map((row) => {
-					const meta = [this.money(row.outstanding), row.oldest_due || __("No invoice")].join(" · ");
-					const follow = row.follow_up_due ? __("Follow up {0}", [row.next_follow_up]) : row.last_outcome || "";
+					const due = row.oldest_due ? __("Due {0}", [this.date(row.oldest_due)]) : "";
+					const follow = row.follow_up_due
+						? __("Follow up {0}", [this.date(row.next_follow_up)])
+						: row.last_outcome || "";
+					const meta = [this.money(row.outstanding), due, follow].filter(Boolean).join(" · ");
 					return `
-					<button type="button" class="fh-card ${row.customer === this.customer ? "fh-selected" : ""}" data-action="open" data-customer="${frappehero.esc(row.customer)}">
-						<span class="fh-card-text"><strong>${frappehero.esc(row.customer_name || row.customer)}</strong><span class="fh-muted">${frappehero.esc(meta)}</span></span>
-						<span class="fh-pill">${frappehero.esc(follow)}</span>
+					<button type="button" class="fh-call-item ${row.customer === this.customer ? "fh-selected" : ""}" data-action="open" data-customer="${frappehero.esc(row.customer)}">
+						<span class="fh-call-item-name">${frappehero.esc(row.customer_name || row.customer)}</span>
+						<span class="fh-call-item-meta">${frappehero.esc(meta)}</span>
 					</button>`;
 				})
 				.join("") || `<div class="fh-empty">${__("No customers match these filters.")}</div>`
@@ -212,44 +224,58 @@ frappehero.CollectionCall = class CollectionCall {
 			this.clientEl.html(
 				`<div class="fh-empty">${__("Choose a customer. The file shows the balance, the invoices, and the earlier calls.")}</div>`
 			);
-			this.composerEl.html("");
 			return;
 		}
 		const phone = client.tel
 			? `<a class="fh-tel" href="${frappehero.esc(client.tel)}">${frappehero.esc(client.phone)}</a>`
 			: frappehero.esc(client.phone || __("No phone"));
-		const buckets = (client.aging && client.aging.buckets) || {};
-		const bucketLine = ["Current", "1-30", "31-60", "61-90", "91 and over"]
-			.map((name) => `<div class="fh-stat"><b>${this.money(buckets[name])}</b><span>${frappehero.esc(name)}</span></div>`)
+		const address = (client.address || []).filter(Boolean).join(", ");
+		const facts = [
+			[__("Group"), client.customer_group],
+			[__("Territory"), client.territory],
+			[__("Tax ID"), client.tax_id],
+			[__("Credit limit"), client.credit_limit == null ? __("None") : this.money(client.credit_limit)],
+		]
+			.filter(([, value]) => value)
+			.map(
+				([label, value]) =>
+					`<div class="fh-call-figure"><span>${frappehero.esc(label)}</span><b>${frappehero.esc(value)}</b></div>`
+			)
 			.join("");
+		const buckets = (client.aging && client.aging.buckets) || {};
+		const aging = ["Current", "1-30", "31-60", "61-90", "91 and over"]
+			.map(
+				(name) =>
+					`<div class="fh-call-figure"><span>${frappehero.esc(name)}</span><b>${frappehero.esc(this.money(buckets[name]))}</b></div>`
+			)
+			.join("");
+		const due = this.money(client.aging && client.aging.amount_due);
+		const disputed = this.money(client.aging && client.aging.disputed_outstanding);
 		this.clientEl.html(`
-			<div class="fh-detail-head">
+			<header class="fh-call-head">
 				<div>
 					<h2>${frappehero.esc(client.customer_name || client.customer)}</h2>
-					<div class="fh-muted">${phone} · ${frappehero.esc(client.email || __("No email"))}${client.disabled ? " · " + __("Disabled") : ""}</div>
+					<p class="fh-muted">${phone} · ${frappehero.esc(client.email || __("No email"))}${client.disabled ? " · " + frappehero.esc(__("Disabled")) : ""}</p>
+					${address ? `<p class="fh-muted">${frappehero.esc(address)}</p>` : ""}
 				</div>
-			</div>
-			<div class="fh-kv">
-				<span class="fh-muted">${__("Group")}</span><span>${frappehero.esc(client.customer_group || "")}</span>
-				<span class="fh-muted">${__("Territory")}</span><span>${frappehero.esc(client.territory || "")}</span>
-				<span class="fh-muted">${__("Tax ID")}</span><span>${frappehero.esc(client.tax_id || "")}</span>
-				<span class="fh-muted">${__("Credit limit")}</span><span>${client.credit_limit == null ? __("None") : this.money(client.credit_limit)}</span>
-				<span class="fh-muted">${__("Outstanding")}</span><span>${this.money(client.outstanding)}</span>
-				<span class="fh-muted">${__("Address")}</span><span>${frappehero.esc((client.address || []).join(", "))}</span>
-			</div>
-			<div class="fh-stats">${bucketLine}</div>
-			<p class="fh-muted">${__("Amount still due {0}. Disputed {1}.", [this.money(client.aging && client.aging.amount_due), this.money(client.aging && client.aging.disputed_outstanding)])}</p>
-			<h3 class="fh-section-label">${__("Open invoices")}</h3>
-			${this.invoiceTable(client.invoices)}
-			<h3 class="fh-section-label">${__("Receipts")}</h3>
-			${this.paymentTable(client.payments)}
-			<h3 class="fh-section-label">${__("Open disputes")}</h3>
-			${this.disputeTable(client.disputes)}
-			<h3 class="fh-section-label">${__("Earlier calls")}</h3>
-			${this.callTable(client.calls)}
-			<h3 class="fh-section-label">${__("Claims and incidents")}</h3>
-			${this.reportTable(client.reports)}
+				<div class="fh-call-outstanding">
+					<b>${frappehero.esc(this.money(client.outstanding))}</b>
+					<span>${__("Outstanding")}</span>
+				</div>
+			</header>
+			<div class="fh-call-facts">${facts}</div>
+			<div class="fh-call-aging">${aging}</div>
+			<p class="fh-call-note">${__("Amount still due {0}. Disputed {1}.", [due, disputed])}</p>
+			${this.section(__("Open invoices"), this.invoiceTable(client.invoices))}
+			${this.section(__("Receipts"), client.payments && client.payments.length ? this.paymentTable(client.payments) : `<p class="fh-empty">${__("No receipts yet.")}</p>`)}
+			${this.section(__("Open disputes"), client.disputes && client.disputes.length ? this.disputeTable(client.disputes) : `<p class="fh-empty">${__("No open dispute.")}</p>`)}
+			${this.section(__("Earlier calls"), client.calls && client.calls.length ? this.callTable(client.calls) : `<p class="fh-empty">${__("No calls yet.")}</p>`)}
+			${this.section(__("Claims and incidents"), client.reports && client.reports.length ? this.reportTable(client.reports) : `<p class="fh-empty">${__("No claim or incident.")}</p>`)}
 		`);
+	}
+
+	section(title, body) {
+		return `<section class="fh-call-section"><h3>${frappehero.esc(title)}</h3>${body}</section>`;
 	}
 
 	invoiceTable(rows) {
@@ -258,8 +284,8 @@ frappehero.CollectionCall = class CollectionCall {
 				(row) => `<tr>
 					<td><input type="checkbox" data-invoice="${frappehero.esc(row.sales_invoice)}" ${this.picked.has(row.sales_invoice) ? "checked" : ""}></td>
 					<td><button type="button" class="fh-btn" data-action="form" data-form="Sales Invoice" data-doc="${frappehero.esc(row.sales_invoice)}">${frappehero.esc(row.sales_invoice)}</button></td>
-					<td>${frappehero.esc(row.due_date || "")}</td>
-					<td class="fh-num">${this.money(row.outstanding)}</td>
+					<td>${frappehero.esc(this.date(row.due_date))}</td>
+					<td class="fh-num">${frappehero.esc(this.money(row.outstanding))}</td>
 					<td>${row.disputed ? __("Disputed") : ""}</td>
 				</tr>`
 			)
@@ -272,8 +298,8 @@ frappehero.CollectionCall = class CollectionCall {
 			.map(
 				(row) => `<tr>
 					<td><button type="button" class="fh-btn" data-action="form" data-form="Payment Entry" data-doc="${frappehero.esc(row.name)}">${frappehero.esc(row.name)}</button></td>
-					<td>${frappehero.esc(row.posting_date || "")}</td>
-					<td class="fh-num">${this.money(row.paid_amount)}</td>
+					<td>${frappehero.esc(this.date(row.posting_date))}</td>
+					<td class="fh-num">${frappehero.esc(this.money(row.paid_amount))}</td>
 					<td>${frappehero.esc(row.mode_of_payment || "")}</td>
 				</tr>`
 			)
@@ -300,7 +326,7 @@ frappehero.CollectionCall = class CollectionCall {
 				(row) => `<tr>
 					<td><button type="button" class="fh-btn" data-action="form" data-form="Hero Collection Call" data-doc="${frappehero.esc(row.name)}">${frappehero.esc(row.name)}</button></td>
 					<td>${frappehero.esc(row.outcome || "")}</td>
-					<td>${frappehero.esc(row.call_time || "")}</td>
+					<td>${frappehero.esc(this.when(row.call_time))}</td>
 					<td>${frappehero.esc(row.notes || "")}</td>
 				</tr>`
 			)
@@ -324,7 +350,7 @@ frappehero.CollectionCall = class CollectionCall {
 
 	renderComposer() {
 		if (!this.client) {
-			this.composerEl.html("");
+			this.composerEl.html(`<p class="fh-empty">${__("Open a customer to log the call.")}</p>`);
 			return;
 		}
 		const draft = this.draft;
@@ -332,24 +358,33 @@ frappehero.CollectionCall = class CollectionCall {
 			.map((outcome) => `<option value="${outcome}" ${draft.outcome === outcome ? "selected" : ""}>${__(outcome)}</option>`)
 			.join("");
 		this.composerEl.html(`
-			<h3 class="fh-section-label">${__("This call")}</h3>
+			<h3>${__("This call")}</h3>
 			<p class="fh-muted">${this.callName ? __("Logging onto {0}.", [frappehero.esc(this.callName)]) : __("Save the call, then the actions below are stamped on it.")}</p>
-			<label class="fh-field">${__("Direction")}
-				<select class="fh-direction">
-					<option value="Outbound" ${draft.direction === "Outbound" ? "selected" : ""}>${__("Outbound")}</option>
-					<option value="Inbound" ${draft.direction === "Inbound" ? "selected" : ""}>${__("Inbound")}</option>
-				</select>
-			</label>
-			<label class="fh-field">${__("Call time")}<input type="datetime-local" class="fh-call-time" value="${frappehero.esc(draft.call_datetime || "")}"></label>
-			<label class="fh-field">${__("Phone")}<input type="text" class="fh-phone" value="${frappehero.esc(draft.phone || "")}"></label>
-			<label class="fh-field">${__("Contact")}<input type="text" class="fh-contact" value="${frappehero.esc(draft.contact_person || "")}"></label>
+			<div class="fh-call-pair">
+				<label class="fh-field">${__("Direction")}
+					<select class="fh-direction">
+						<option value="Outbound" ${draft.direction === "Outbound" ? "selected" : ""}>${__("Outbound")}</option>
+						<option value="Inbound" ${draft.direction === "Inbound" ? "selected" : ""}>${__("Inbound")}</option>
+					</select>
+				</label>
+				<label class="fh-field">${__("Call time")}<input type="datetime-local" class="fh-call-time" value="${frappehero.esc(draft.call_datetime || "")}"></label>
+			</div>
+			<div class="fh-call-pair">
+				<label class="fh-field">${__("Phone")}<input type="text" class="fh-phone" value="${frappehero.esc(draft.phone || "")}"></label>
+				<label class="fh-field">${__("Contact")}<input type="text" class="fh-contact" value="${frappehero.esc(draft.contact_person || "")}"></label>
+			</div>
 			<label class="fh-field">${__("Outcome")}<select class="fh-outcome"><option value="">${__("Choose")}</option>${outcomes}</select></label>
 			<label class="fh-field">${__("Notes")}<textarea class="fh-notes">${frappehero.esc(draft.notes || "")}</textarea></label>
-			<label class="fh-field">${__("Promise amount")}<input type="text" class="fh-promise-amount" inputmode="decimal" value="${frappehero.esc(draft.promise_amount || "")}"></label>
-			<label class="fh-field">${__("Promise date")}<input type="date" class="fh-promise-date" value="${frappehero.esc(draft.promise_date || "")}"></label>
+			<div class="fh-call-pair">
+				<label class="fh-field">${__("Promise amount")}<input type="text" class="fh-promise-amount" inputmode="decimal" value="${frappehero.esc(draft.promise_amount || "")}"></label>
+				<label class="fh-field">${__("Promise date")}<input type="date" class="fh-promise-date" value="${frappehero.esc(draft.promise_date || "")}"></label>
+			</div>
 			<label class="fh-field">${__("Next follow-up")}<input type="date" class="fh-follow-date" value="${frappehero.esc(draft.next_follow_up || "")}"></label>
 			<div class="fh-call-actions">
 				<button type="button" class="fh-btn" data-action="save">${__("Save call")}</button>
+			</div>
+			<h3>${__("Actions")}</h3>
+			<div class="fh-call-actions fh-call-action-list">
 				<button type="button" class="fh-btn" data-action="soa">${__("Generate SOA")}</button>
 				<button type="button" class="fh-btn" data-action="send">${__("Send SOA")}</button>
 				<button type="button" class="fh-btn" data-action="report">${__("Claim or incident")}</button>
@@ -491,9 +526,9 @@ frappehero.CollectionCall = class CollectionCall {
 		const rows = (statement && statement.rows) || [];
 		const disputed = (statement && statement.disputed_rows) || [];
 		return `
-			<p>${__("Amount due")}: ${this.money(statement && statement.amount_due)}</p>
+			<p>${__("Amount due")}: ${frappehero.esc(this.money(statement && statement.amount_due))}</p>
 			${this.statementTable(rows, true)}
-			${disputed.length ? `<h4>${__("Disputed Transactions")}</h4><p>${__("Left out of the amount due.")} ${this.money(statement.disputed_outstanding)}</p>${this.statementTable(disputed, false)}` : ""}
+					${disputed.length ? `<h4>${__("Disputed Transactions")}</h4><p>${__("Left out of the amount due.")} ${frappehero.esc(this.money(statement.disputed_outstanding))}</p>${this.statementTable(disputed, false)}` : ""}
 		`;
 	}
 
@@ -501,11 +536,11 @@ frappehero.CollectionCall = class CollectionCall {
 		const body = (rows || [])
 			.map(
 				(row) => `<tr>
-					<td>${frappehero.esc(row.posting_date || "")}</td>
+					<td>${frappehero.esc(this.date(row.posting_date))}</td>
 					<td>${frappehero.esc(row.sales_invoice || "")}</td>
-					<td>${frappehero.esc(row.due_date || "")}</td>
-					<td class="fh-num">${this.money(row.outstanding)}</td>
-					${withBalance ? `<td class="fh-num">${row.running_balance == null ? "" : this.money(row.running_balance)}</td>` : ""}
+					<td>${frappehero.esc(this.date(row.due_date))}</td>
+					<td class="fh-num">${frappehero.esc(this.money(row.outstanding))}</td>
+					${withBalance ? `<td class="fh-num">${row.running_balance == null ? "" : frappehero.esc(this.money(row.running_balance))}</td>` : ""}
 				</tr>`
 			)
 			.join("");
@@ -672,6 +707,32 @@ frappehero.CollectionCall = class CollectionCall {
 	}
 
 	money(value) {
-		return frappe.format(value || 0, { fieldtype: "Float", precision: 2 });
+		const number = Number(value);
+		const amount = Number.isFinite(number) ? number : 0;
+		const sign = amount < 0 ? "-" : "";
+		const [whole, fraction] = Math.abs(amount).toFixed(2).split(".");
+		const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+		return `${sign}${grouped}.${fraction}`;
+	}
+
+	date(value) {
+		if (!value) {
+			return "";
+		}
+		const text = String(value).slice(0, 10);
+		if (frappe.datetime && frappe.datetime.str_to_user) {
+			return frappe.datetime.str_to_user(text);
+		}
+		return text;
+	}
+
+	when(value) {
+		if (!value) {
+			return "";
+		}
+		const text = String(value).replace("T", " ");
+		const clock = text.slice(11, 16);
+		const day = this.date(text);
+		return clock ? `${day} ${clock}` : day;
 	}
 };
