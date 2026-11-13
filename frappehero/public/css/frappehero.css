@@ -1126,7 +1126,7 @@
 	color: inherit;
 }
 
-@media (max-width: 960px) {
+@media (max-width: 1100px) {
 	.fh-app {
 		gap: 16px;
 	}
@@ -1246,12 +1246,7 @@
 	}
 }
 
-@media (max-width: 720px) {
-	.fh-call-summary {
-		grid-template-columns: 1fr;
-		gap: 10px;
-	}
-
+@media (max-width: 1100px) {
 	.fh-call-head {
 		display: grid;
 		grid-template-columns: minmax(0, 1fr) auto;
@@ -1277,19 +1272,30 @@
 		line-height: 1.15;
 	}
 
-	.fh-call-queue {
-		max-height: 46vh;
+	.fh-call-bar input,
+	.fh-call-log input,
+	.fh-call-log select,
+	.fh-call-log textarea {
+		font-size: 16px;
+		box-sizing: border-box;
+	}
+
+	.fh-call-queue,
+	.fh-call-stage {
+		max-height: none;
+		overflow: visible;
 		padding-right: 0;
 	}
 
-	.fh-call button.fh-call-item {
+	.fh-page .fh-call button.fh-call-item {
 		border: 1px solid var(--border-color);
 		border-radius: 12px;
-		padding: 12px 14px;
+		padding: 14px 16px;
 		margin-bottom: 8px;
+		min-height: 52px;
 	}
 
-	.fh-call button.fh-call-item.fh-selected {
+	.fh-page .fh-call button.fh-call-item.fh-selected {
 		border-color: var(--text-color);
 	}
 
@@ -1320,5 +1326,11 @@
 		border-top: 0;
 		padding-top: 0;
 		margin-top: 12px;
+	}
+}
+
+@media (max-width: 560px) {
+	.fh-call-summary {
+		grid-template-columns: 1fr;
 	}
 }
