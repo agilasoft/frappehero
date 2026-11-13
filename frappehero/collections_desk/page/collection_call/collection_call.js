@@ -288,6 +288,7 @@ frappehero.CollectionCall = class CollectionCall {
 			this.clientEl.html(
 				`<div class="fh-empty">${__("Choose a customer. The cockpit shows the balance, the invoices, and the earlier calls.")}</div>`
 			);
+			this.renderComposer();
 			return;
 		}
 		const phone = client.tel
