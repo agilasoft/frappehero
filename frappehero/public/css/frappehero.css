@@ -952,7 +952,7 @@
 	line-height: 1.35;
 }
 
-.fh-call-item.fh-selected {
+.fh-call button.fh-call-item.fh-selected {
 	border-left-color: var(--text-color);
 	font-weight: 600;
 }
@@ -1293,22 +1293,22 @@
 		border-color: var(--text-color);
 	}
 
-	.fh-call-sticky,
-	.fh-call-cluster,
-	.fh-call-log,
+	.fh-call-sticky:has(.fh-call-head),
+	.fh-call-cluster:not(:empty),
+	.fh-call-log:not(:empty),
 	.fh-call-section {
 		border: 1px solid var(--border-color);
 		border-radius: 12px;
 		padding: 14px 16px;
 	}
 
-	.fh-call-sticky {
+	.fh-call-sticky:has(.fh-call-head) {
 		position: static;
 		margin: 0 0 12px;
 	}
 
-	.fh-call-cluster,
-	.fh-call-log {
+	.fh-call-cluster:not(:empty),
+	.fh-call-log:not(:empty) {
 		margin-top: 12px;
 	}
 
