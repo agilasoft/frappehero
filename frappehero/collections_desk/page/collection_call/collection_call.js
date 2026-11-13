@@ -34,7 +34,6 @@ frappehero.CollectionCall = class CollectionCall {
 		this.draft = this.emptyDraft();
 		this.filters = { text: "", overdue_only: 0, followups_only: 0, mine: 0 };
 		this.page.main.addClass("fh-page");
-		this.installMenus();
 		this.page.main.html(`
 			<div class="fh-app fh-call">
 				<div class="fh-call-bar">
@@ -45,6 +44,7 @@ frappehero.CollectionCall = class CollectionCall {
 						<label class="fh-check"><input type="checkbox" class="fh-follow"> ${__("Follow-ups due")}</label>
 						<label class="fh-check"><input type="checkbox" class="fh-mine"> ${__("My calls")}</label>
 					</div>
+					<div class="fh-call-tools"></div>
 				</div>
 				<div class="fh-call-summary"></div>
 				<div class="fh-call-grid">
@@ -52,7 +52,6 @@ frappehero.CollectionCall = class CollectionCall {
 					<section class="fh-call-stage">
 						<div class="fh-call-sticky">
 							<div class="fh-call-identity"></div>
-							${this.toolBar()}
 						</div>
 						<div class="fh-call-cluster"></div>
 						<div class="fh-call-log"></div>
@@ -86,6 +85,10 @@ frappehero.CollectionCall = class CollectionCall {
 			render_input: true,
 		});
 		this.companyControl.set_value(frappe.defaults.get_user_default("Company"));
+		const toolbar = this.page.inner_toolbar;
+		this.page.inner_toolbar = this.page.main.find(".fh-call-tools");
+		this.installMenus();
+		this.page.inner_toolbar = toolbar;
 		const root = this.page.main.find(".fh-call").get(0);
 		root.addEventListener("click", (event) => this.onClick(event));
 		root.addEventListener("change", (event) => this.onChange(event));
@@ -114,35 +117,6 @@ frappehero.CollectionCall = class CollectionCall {
 			return;
 		}
 		return action();
-	}
-
-	menuItem(action, label, extra) {
-		return `<button type="button" class="fh-menu-btn" data-action="${action}" ${extra || ""}>${frappehero.esc(label)}</button>`;
-	}
-
-	toolBar() {
-		return `
-			<div class="fh-call-tools">
-				<div class="fh-cockpit-menus">
-					<div class="fh-cockpit-menu">
-						<span>${__("Create")}</span>
-						${this.menuItem("save", __("Create call"))}
-						${this.menuItem("soa", __("Create statement"))}
-						${this.menuItem("send", __("Send statement"))}
-						${this.menuItem("report", __("Create claim"), 'data-report-type="Claim"')}
-						${this.menuItem("report", __("Create incident"), 'data-report-type="Incident"')}
-						${this.menuItem("payment", __("Create payment"))}
-						${this.menuItem("dispute", __("Create dispute"))}
-					</div>
-					<div class="fh-cockpit-menu">
-						<span>${__("Open")}</span>
-						${this.menuItem("open-statement", __("Statement of Account"))}
-						${this.menuItem("open-calls", __("Collection calls"))}
-						${this.menuItem("open-claims", __("Claims and incidents"))}
-					</div>
-				</div>
-			</div>
-		`;
 	}
 
 	emptyDraft() {

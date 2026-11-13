@@ -898,39 +898,25 @@
 	border-bottom: 1px solid var(--border-color);
 }
 
-.fh-cockpit-menus {
+.fh-call-tools {
 	display: flex;
 	flex-wrap: wrap;
-	gap: 10px 28px;
+	gap: 8px;
 	align-items: center;
-	margin-top: 12px;
+	margin-left: auto;
 }
 
-.fh-cockpit-menu {
-	display: flex;
-	flex-wrap: wrap;
-	align-items: center;
+.fh-call-tools .inner-group-button,
+.fh-call-tools .custom-btn-group {
+	position: relative;
 }
 
-.fh-cockpit-menu > span {
-	color: var(--text-muted);
-	font-size: 12px;
-	margin-right: 8px;
+.fh-call-identity:empty {
+	display: none;
 }
 
-.fh-menu-btn {
-	border: 0;
-	background: none;
-	color: var(--text-color);
-	font: inherit;
-	font-weight: 500;
-	padding: 6px 12px;
-	cursor: pointer;
-	text-decoration: none;
-}
-
-.fh-cockpit-menu .fh-menu-btn + .fh-menu-btn {
-	border-left: 1px solid var(--border-color);
+.fh-call-sticky:not(:has(.fh-call-head)) {
+	display: none;
 }
 
 .fh-call-queue {
