@@ -38,6 +38,56 @@ frappe.provide("frappehero");
 		},
 	};
 
+	// Same order as OPENING_SUMMARY_ROWS in opening_invoice_logic.py.
+	frappehero.opening_summary_rows = () => [
+		{ label: "Sales Invoice", doctype: "Sales Invoice", is_return: "0" },
+		{ label: "Credit Note", doctype: "Sales Invoice", is_return: "1" },
+		{ label: "Purchase Invoice", doctype: "Purchase Invoice", is_return: "0" },
+		{ label: "Debit Note", doctype: "Purchase Invoice", is_return: "1" },
+	];
+
+	frappehero.opening_summary_route = (doctype, company, is_return) => ({
+		doctype,
+		filters: {
+			is_opening: "Yes",
+			company,
+			docstatus: 1,
+			is_return: String(is_return),
+		},
+	});
+
+	const OPENING_SUMMARY_TEMPLATE = `
+{% $.each(data, (company, summary) => { %}
+<div style="margin: 15px 0px -10px 0px;"> {{ company }}</div>
+<table class="table table-bordered small">
+	<thead>
+		<tr>
+			<td style="width: 33%">{{ __("Invoice Type") }}</td>
+			<td style="width: 33%" class="text-right">{{ __("Opening Invoices") }}</td>
+			<td style="width: 33%" class="text-right">{{ __("Total Outstanding") }}</td>
+		</tr>
+	</thead>
+	<tbody>
+		{% $.each(rows, (idx, row) => { %}
+		{% if summary[row.label] %}
+		<tr>
+			<td>
+				<a class="invoice-link" data-type="{{ row.doctype }}" data-company="{{ company }}" data-return="{{ row.is_return }}">
+					{{ __(row.label) }}</a>
+			</td>
+			<td class="text-right">
+				{{ summary[row.label].total_invoices }}
+			</td>
+			<td class="text-right">
+				{{ format_currency(summary[row.label].outstanding_amount, summary.currency, 2) }}
+			</td>
+		</tr>
+		{% endif %}
+		{% }); %}
+	</tbody>
+</table>
+{% }); %}`;
+
 	const PARTY_TYPES = {
 		Sales: {
 			party_type: "Customer",
@@ -60,6 +110,7 @@ frappe.provide("frappehero");
 			install_type_guard();
 			extend_invoice_types(frm);
 			install_note_alert();
+			install_summary_handler();
 		},
 
 		refresh(frm) {
@@ -67,11 +118,13 @@ frappe.provide("frappehero");
 			extend_invoice_types(frm);
 			watch_grid(frm);
 			install_note_alert();
+			install_summary_handler();
 			// ERPNext sets the button and party labels in its own refresh handler.
 			// Paint again after that, in case the select was rebuilt from Sales and Purchase.
 			setTimeout(() => {
 				paint_opening_select(frm.fields_dict && frm.fields_dict.invoice_type);
 				prepare_form(frm);
+				render_opening_summary(frm);
 			}, 0);
 		},
 
@@ -92,6 +145,54 @@ frappe.provide("frappehero");
 
 	install_type_guard();
 	frappehero._opening_invoice_tool_registered = true;
+
+	function install_summary_handler() {
+		const form_ui = frappe.ui && frappe.ui.form;
+		if (!form_ui || !form_ui.off || !form_ui.on) {
+			return;
+		}
+		// ERPNext's summary only lists Sales Invoice and Purchase Invoice.
+		form_ui.off("Opening Invoice Creation Tool", "make_dashboard");
+		form_ui.on("Opening Invoice Creation Tool", "make_dashboard", (frm) => {
+			render_opening_summary(frm);
+		});
+	}
+
+	function render_opening_summary(frm) {
+		if (!frm || !frm.dashboard || !frm.doc || frm.doc.import_in_progress || !frm.doc.__onload) {
+			return;
+		}
+		const data = frm.doc.__onload.opening_invoices_summary;
+		const empty =
+			!data ||
+			(typeof $ !== "undefined" && $.isEmptyObject && $.isEmptyObject(data)) ||
+			!Object.keys(data).length;
+		if (frm.dashboard.parent) {
+			frm.dashboard.parent.find(".custom").remove();
+		}
+		if (empty) {
+			return;
+		}
+		const section = frm.dashboard.add_section(
+			frappe.render_template(OPENING_SUMMARY_TEMPLATE, {
+				data,
+				rows: frappehero.opening_summary_rows(),
+			}),
+			__("Opening Invoices Summary")
+		);
+		section.on("click", ".invoice-link", function () {
+			const link = $(this);
+			const route = frappehero.opening_summary_route(
+				link.attr("data-type"),
+				link.attr("data-company"),
+				link.attr("data-return")
+			);
+			frappe.set_route("List", route.doctype, route.filters);
+		});
+		if (frm.dashboard.show) {
+			frm.dashboard.show();
+		}
+	}
 
 	function prepare_form(frm) {
 		if (!frm.doc) {

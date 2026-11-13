@@ -72,6 +72,66 @@ def invoice_kind(invoice_type) -> dict:
 	return dict(kind)
 
 
+# Opening Invoice summary rows. A credit note is an opening Sales Invoice with
+# is_return set. A debit note is an opening Purchase Invoice with is_return set.
+# The desk summary renders these labels in this order.
+OPENING_SUMMARY_ROWS = (
+	{"label": "Sales Invoice", "doctype": "Sales Invoice", "is_return": 0},
+	{"label": "Credit Note", "doctype": "Sales Invoice", "is_return": 1},
+	{"label": "Purchase Invoice", "doctype": "Purchase Invoice", "is_return": 0},
+	{"label": "Debit Note", "doctype": "Purchase Invoice", "is_return": 1},
+)
+
+
+def summary_label(doctype, is_return) -> str:
+	"""Sales Invoice, Credit Note, Purchase Invoice, or Debit Note."""
+	flag = 1 if _is_return(is_return) else 0
+	for row in OPENING_SUMMARY_ROWS:
+		if row["doctype"] == doctype and row["is_return"] == flag:
+			return row["label"]
+	return doctype
+
+
+def fold_opening_summary(company_currency, rows_by_doctype) -> tuple:
+	"""Split opening invoice totals so notes are not folded into invoices.
+
+	`rows_by_doctype` maps Sales Invoice and Purchase Invoice to company rows
+	that include is_return, total_invoices, and outstanding_amount. Outstanding
+	keeps its sign: a credit balance stays negative.
+	"""
+	summary = {}
+	for doctype, rows in (rows_by_doctype or {}).items():
+		for row in rows or []:
+			company = _row_value(row, "company")
+			if not company:
+				continue
+			label = summary_label(doctype, _row_value(row, "is_return"))
+			company_summary = summary.setdefault(company, {"currency": (company_currency or {}).get(company)})
+			bucket = company_summary.setdefault(label, {"total_invoices": 0, "outstanding_amount": 0.0})
+			bucket["total_invoices"] += int(_number(_row_value(row, "total_invoices")))
+			bucket["outstanding_amount"] += _number(_row_value(row, "outstanding_amount"))
+
+	max_count = {}
+	for company_summary in summary.values():
+		for label, bucket in list(company_summary.items()):
+			if label == "currency":
+				continue
+			if not bucket["total_invoices"]:
+				company_summary.pop(label, None)
+				continue
+			due = bucket["outstanding_amount"]
+			if not due:
+				continue
+			current = max_count.setdefault(label, {"max_paid": 0.0, "max_due": due})
+			if due > current["max_due"]:
+				current["max_due"] = due
+
+	summary = {
+		company: values for company, values in summary.items() if any(key != "currency" for key in values)
+	}
+	return summary, max_count
+
+
 def is_note(invoice_type) -> bool:
 	"""True when this upload creates a credit note or a debit note."""
 	try:
@@ -169,6 +229,16 @@ def _copy_mapping(value):
 	if isinstance(value, dict):
 		return type(value)(value)
 	return dict(value)
+
+
+def _is_return(value) -> bool:
+	return value is True or str(value).strip() == "1"
+
+
+def _row_value(row, key):
+	if isinstance(row, dict):
+		return row.get(key)
+	return getattr(row, key, None)
 
 
 def _number(value) -> float:
