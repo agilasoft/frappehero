@@ -149,6 +149,23 @@ MODULE_IDEAS = [
 		),
 		"builds_on": "The same desk pattern as Finance Desk: rules that can be tested without a site, and a page that applies them.",
 	},
+	{
+		"name": "Collections Desk",
+		"route": "collection-call",
+		"area": "Receivables",
+		"summary": "Call a customer, see the receivables file, and log what was said.",
+		"problem": (
+			"Collections staff move between the customer, the statement, the invoices, "
+			"and the payment form. The call itself is written down somewhere else."
+		),
+		"shape": (
+			"A queue of customers with an open balance or a follow-up due. The client "
+			"file shows credit, aging, invoices, receipts, disputes, and earlier calls. "
+			"Log the call, then generate or email the statement, raise a claim or incident, "
+			"draft a receipt, or open a dispute."
+		),
+		"builds_on": "Statement of Account, Receivables Aging, and Dispute Desk already know the invoices and the open disputes.",
+	},
 ]
 
 

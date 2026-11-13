@@ -24,7 +24,7 @@ class TestAppStructure(unittest.TestCase):
 		}
 		self.assertEqual(
 			modules,
-			{"Frappe Hero", "Permission Studio", "Accounts Mapping", "Access Desk", "Finance Desk", "Dispute Desk"},
+			{"Frappe Hero", "Permission Studio", "Accounts Mapping", "Access Desk", "Finance Desk", "Dispute Desk", "Collections Desk"},
 		)
 		for path in PACKAGE.rglob("*.json"):
 			payload = json.loads(path.read_text())
@@ -73,7 +73,7 @@ class TestAppStructure(unittest.TestCase):
 		self.assertEqual(titles[0], "Frappe Hero")
 		self.assertEqual(
 			set(titles),
-			{"Frappe Hero", "Permission Studio", "Accounts Mapping", "Access Desk", "Finance Desk", "Dispute Desk"},
+			{"Frappe Hero", "Permission Studio", "Accounts Mapping", "Access Desk", "Finance Desk", "Dispute Desk", "Collections Desk"},
 		)
 		for row in dock["items"]:
 			self.assertEqual(row["link_type"], "Sidebar")

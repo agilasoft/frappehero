@@ -1,7 +1,7 @@
 app_name = "frappehero"
 app_title = "Frappe Hero"
 app_publisher = "Agilasoft"
-app_description = "Group users and the documents they may use, map accounts, and review access, defaults, shares, dimensions, tax, opening entries, credit notes, debit notes, receivable repair, invoice disputes, multi-currency payments, BSP exchange rates, cheque leaves, and proof of payment."
+app_description = "Group users and the documents they may use, map accounts, and review access, defaults, shares, dimensions, tax, opening entries, credit notes, debit notes, receivable repair, invoice disputes, collection calls, multi-currency payments, BSP exchange rates, cheque leaves, and proof of payment."
 app_email = "dev@agilasoft.com"
 app_license = "mit"
 
@@ -100,3 +100,5 @@ scheduler_events = {
 # Invoice and a Debit Note upload as a return Purchase Invoice.
 # Proof of Payment stores a file on the payment and stamps who uploaded it.
 # The page lists open assignments that still have no file.
+# Collection Call logs a call against a customer, emails the statement, and
+# can draft a receipt or raise a claim, an incident, or a dispute.
