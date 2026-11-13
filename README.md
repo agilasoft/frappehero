@@ -13,7 +13,7 @@ bench --site your-site install-app frappehero
 bench --site your-site migrate
 ```
 
-**Frappe Hero** is an icon on the desktop and opens at `/desk/frappe-hero`. The dock lists Frappe Hero, Permission Studio, Accounts Mapping, Access Desk, Finance Desk, and Dispute Desk. System Manager can use every module. Accounts Manager can use Account Mapper, the unmapped report, the finance desk, and the dispute desk.
+**Frappe Hero** is an icon on the desktop and opens at `/desk/frappe-hero`. The dock lists Frappe Hero, Permission Studio, Accounts Mapping, Access Desk, Finance Desk, Dispute Desk, and Collections Desk. System Manager can use every module. Accounts Manager can use Account Mapper, the unmapped report, the finance desk, the dispute desk, and the collections desk. Accounts User can log collection calls, send a statement, raise a claim or incident, and draft a receipt.
 
 ## Permission Studio
 
@@ -123,9 +123,29 @@ Opening the dispute releases every active action on that invoice. Hold, Collecti
 
 On a site, an open ERPNext Dunning that names the invoice is marked Resolved. Draft dunning is left alone, and nothing is cancelled. A Sales Invoice hold (`on_hold` or `is_on_hold`) is cleared when that field exists.
 
+## Collections Desk
+
+System Manager, Accounts Manager, and Accounts User.
+
+**Collection Call** is the screen a collector works from. The queue is every customer in the company with an open sales invoice, plus anyone whose follow-up date has arrived. Follow-ups come first, then the oldest invoice. Filter to overdue balances, follow-ups that are due, or the calls you logged. Search covers the customer, the group, the territory, and the last outcome.
+
+The client file shows the name, the phone as a link the staff can dial, the email, the address, the group, the territory, the tax id, the credit limit, and the outstanding balance. Aging sits under that, with open disputes kept out of the amount due the same way the statement does. Open invoices, recent receipts, open disputes, earlier calls, and claims or incidents are on the same page.
+
+The call log records the direction, the time, the number, the person reached, the outcome, and the notes. A promise needs an amount and a date. No Answer, Busy, Wrong Number, and Voicemail cannot carry a promise. A callback needs a follow-up date. Saving writes a **Hero Collection Call**.
+
+From the same customer the staff can:
+
+- **Generate SOA** previews the statement and opens Statement of Account for that company and customer.
+- **Send SOA** emails that statement to the address they confirm, and stores the address and the time on the open call.
+- **Claim or incident** creates a **Hero Collection Report**. A claim that names one sales invoice can also open a dispute, which releases hold, collection, and dunning. Raising a dispute stays with Accounts Manager and System Manager.
+- **Record payment** drafts a Receive Payment Entry for the ticked invoices, oldest due first, and opens it. The amount cannot exceed those invoices, and the invoices must share a receivable account and the company currency. Submit, cheque leaf, multi-currency, and proof of payment stay on Payment Entry. The company needs a default bank or cash account.
+- **Raise dispute** opens a dispute for the one invoice that is ticked.
+
+The page does not place the call. The phone number is a `tel:` link.
+
 ## Tests
 
-The rules for grants, conflicts, the account tree, role diffs, reviews, dimensions, tax inheritance, opening journals, opening credit and debit notes, receivable repair, cheque leaves, multi-currency payments, and proof of payment run without a site:
+The rules for grants, conflicts, the account tree, role diffs, reviews, dimensions, tax inheritance, opening journals, opening credit and debit notes, receivable repair, cheque leaves, multi-currency payments, proof of payment, and collection calls run without a site:
 
 ```bash
 python -m unittest discover -s frappehero -p "test_*.py"

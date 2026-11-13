@@ -97,7 +97,10 @@
 .fh-detail textarea,
 .fh-detail select,
 .fh-form input[type="text"],
-.fh-form select {
+.fh-form select,
+.fh-composer input,
+.fh-composer textarea,
+.fh-composer select {
 	border: 0;
 	border-bottom: 1px solid var(--border-color);
 	border-radius: 0;
@@ -201,6 +204,7 @@
 
 .fh-list,
 .fh-detail,
+.fh-composer,
 .fh-tree-wrap,
 .fh-matrix-wrap {
 	max-height: calc(100vh - 160px);
@@ -783,6 +787,60 @@
 	color: var(--text-color);
 }
 
+.fh-call-grid {
+	display: grid;
+	grid-template-columns: 240px minmax(0, 1fr) 300px;
+	gap: 32px;
+	align-items: start;
+	min-width: 0;
+}
+
+.fh-kv {
+	display: grid;
+	grid-template-columns: 132px minmax(0, 1fr);
+	gap: 4px 12px;
+	margin: 12px 0;
+	font-size: 13px;
+}
+
+.fh-section-label {
+	margin: 18px 0 6px;
+	font-size: 12px;
+	font-weight: 500;
+	color: var(--text-muted);
+}
+
+.fh-field {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	margin: 0 0 10px;
+	font-size: 12px;
+	color: var(--text-muted);
+}
+
+.fh-composer textarea {
+	min-height: 72px;
+	resize: vertical;
+}
+
+.fh-call-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px 14px;
+	margin-top: 8px;
+}
+
+.fh-num {
+	text-align: right;
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+
+.fh-tel {
+	color: inherit;
+}
+
 @media (max-width: 960px) {
 	.fh-app {
 		gap: 16px;
@@ -806,7 +864,8 @@
 	.fh-body,
 	.fh-split,
 	.fh-thirds,
-	.fh-tree-layout {
+	.fh-tree-layout,
+	.fh-call-grid {
 		grid-template-columns: 1fr;
 		gap: 16px;
 	}
@@ -822,6 +881,7 @@
 	}
 
 	.fh-detail,
+	.fh-composer,
 	.fh-tree-wrap,
 	.fh-matrix-wrap,
 	.fh-form {

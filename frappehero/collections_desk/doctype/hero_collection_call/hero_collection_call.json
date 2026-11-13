@@ -1,0 +1,222 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "naming_series:",
+ "creation": "2026-11-13 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "naming_series",
+  "company",
+  "customer",
+  "call_datetime",
+  "direction",
+  "column_break_main",
+  "collector",
+  "phone",
+  "contact_person",
+  "outcome",
+  "section_log",
+  "notes",
+  "section_promise",
+  "promise_amount",
+  "promise_date",
+  "next_follow_up",
+  "column_break_follow",
+  "statement_sent_to",
+  "statement_sent_on",
+  "payment_entry",
+  "collection_report"
+ ],
+ "fields": [
+  {
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "label": "Series",
+   "options": "CALL-.YYYY.-.#####",
+   "default": "CALL-.YYYY.-.#####",
+   "reqd": 1,
+   "no_copy": 1,
+   "set_only_once": 1
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "label": "Company",
+   "options": "Company",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "customer",
+   "fieldtype": "Link",
+   "label": "Customer",
+   "options": "Customer",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "call_datetime",
+   "fieldtype": "Datetime",
+   "label": "Call Time",
+   "reqd": 1,
+   "default": "Now",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "direction",
+   "fieldtype": "Select",
+   "label": "Direction",
+   "options": "Outbound\nInbound",
+   "default": "Outbound",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_main",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "collector",
+   "fieldtype": "Link",
+   "label": "Collector",
+   "options": "User",
+   "reqd": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "phone",
+   "fieldtype": "Data",
+   "label": "Phone",
+   "description": "The number dialed, or the number the customer called from."
+  },
+  {
+   "fieldname": "contact_person",
+   "fieldtype": "Data",
+   "label": "Contact Person"
+  },
+  {
+   "fieldname": "outcome",
+   "fieldtype": "Select",
+   "label": "Outcome",
+   "options": "Reached\nNo Answer\nBusy\nWrong Number\nVoicemail\nPromised\nRefused\nDisputed\nCallback",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "section_log",
+   "fieldtype": "Section Break",
+   "label": "Call"
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Small Text",
+   "label": "Notes"
+  },
+  {
+   "fieldname": "section_promise",
+   "fieldtype": "Section Break",
+   "label": "Promise and Follow-up"
+  },
+  {
+   "fieldname": "promise_amount",
+   "fieldtype": "Currency",
+   "label": "Promise Amount",
+   "options": "Company:company"
+  },
+  {
+   "fieldname": "promise_date",
+   "fieldtype": "Date",
+   "label": "Promise Date"
+  },
+  {
+   "fieldname": "next_follow_up",
+   "fieldtype": "Date",
+   "label": "Next Follow-up"
+  },
+  {
+   "fieldname": "column_break_follow",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "statement_sent_to",
+   "fieldtype": "Data",
+   "label": "Statement Sent To",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "statement_sent_on",
+   "fieldtype": "Datetime",
+   "label": "Statement Sent On",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "payment_entry",
+   "fieldtype": "Link",
+   "label": "Payment Entry",
+   "options": "Payment Entry",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "collection_report",
+   "fieldtype": "Link",
+   "label": "Claim or Incident",
+   "options": "Hero Collection Report",
+   "read_only": 1,
+   "no_copy": 1
+  }
+ ],
+ "links": [],
+ "modified": "2026-11-13 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Collections Desk",
+ "name": "Hero Collection Call",
+ "naming_rule": "By \"Naming Series\" field",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Accounts Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Accounts User",
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1,
+ "description": "One collection call with a customer: who was reached, what was promised, and the statement, receipt, or report raised from it."
+}
