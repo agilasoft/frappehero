@@ -243,10 +243,13 @@ frappehero.CollectionCall = class CollectionCall {
 					const follow = row.follow_up_due
 						? __("Follow up {0}", [this.date(row.next_follow_up)])
 						: row.last_outcome || "";
-					const meta = [this.money(row.outstanding), due, follow].filter(Boolean).join(" · ");
+					const meta = [due, follow].filter(Boolean).join(" · ");
 					return `
 					<button type="button" class="fh-call-item ${row.customer === this.customer ? "fh-selected" : ""}" data-action="open" data-customer="${frappehero.esc(row.customer)}">
-						<span class="fh-call-item-name">${frappehero.esc(row.customer_name || row.customer)}</span>
+						<span class="fh-call-item-top">
+							<span class="fh-call-item-name">${frappehero.esc(row.customer_name || row.customer)}</span>
+							<b class="fh-call-item-amount">${frappehero.esc(this.money(row.outstanding))}</b>
+						</span>
 						<span class="fh-call-item-meta">${frappehero.esc(meta)}</span>
 					</button>`;
 				})
