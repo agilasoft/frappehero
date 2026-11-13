@@ -154,6 +154,19 @@ def freeze_report(previous, current) -> None:
 		raise CollectionError("The sales invoice cannot change after a dispute is opened.")
 
 
+def assert_invoice_for_customer(invoice, company, customer, invoice_company, invoice_customer, docstatus=None, submitted=False) -> None:
+	"""The named invoice has to be this customer's, in this company.
+
+	A dispute also needs the invoice to be submitted. A blank invoice is allowed.
+	"""
+	if not clean_text(invoice):
+		return
+	if clean_text(invoice_company) != clean_text(company) or clean_text(invoice_customer) != clean_text(customer):
+		raise CollectionError("That sales invoice is not for this customer.")
+	if submitted and int(docstatus or 0) != 1:
+		raise CollectionError("A dispute needs a submitted sales invoice.")
+
+
 def dispute_from_report(report) -> dict:
 	"""The dispute a claim can open. An incident, or a claim with no invoice, cannot."""
 	report_type = clean_text(report.get("report_type"))

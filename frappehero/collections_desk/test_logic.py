@@ -6,6 +6,7 @@ import unittest
 from frappehero.collections_desk.logic import (
 	CollectionError,
 	allocate_receipt,
+	assert_invoice_for_customer,
 	assemble_client,
 	build_queue,
 	dispute_from_report,
@@ -90,6 +91,11 @@ class TestReport(unittest.TestCase):
 		self.assertEqual(request["sales_invoice"], "SINV-1")
 		self.assertEqual(request["reference_doctype"], "Hero Collection Report")
 		self.assertEqual(request["source_module"], "Collections Desk")
+		assert_invoice_for_customer("SINV-1", "Co", "Acme", "Co", "Acme", docstatus=1, submitted=True)
+		with self.assertRaises(CollectionError):
+			assert_invoice_for_customer("SINV-9", "Co", "Acme", "Co", "Other", docstatus=1, submitted=True)
+		with self.assertRaises(CollectionError):
+			assert_invoice_for_customer("SINV-1", "Co", "Acme", "Co", "Acme", docstatus=0, submitted=True)
 		with self.assertRaises(CollectionError):
 			dispute_from_report({**report, "report_type": "Incident", "name": "RPT-1"})
 		with self.assertRaises(CollectionError):

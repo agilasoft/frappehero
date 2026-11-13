@@ -155,7 +155,11 @@ frappehero.CollectionCall = class CollectionCall {
 		await this.loadClient();
 	}
 
-	async loadClient() {
+	async loadClient(options) {
+		const keepDraft = Boolean(options && options.keepDraft);
+		if (keepDraft) {
+			this.readDraft();
+		}
 		this.renderQueue();
 		if (!this.customer || !this.company()) {
 			this.client = null;
@@ -172,7 +176,7 @@ frappehero.CollectionCall = class CollectionCall {
 			return;
 		}
 		this.client = client;
-		if (!this.draft.phone) {
+		if (!keepDraft && !this.draft.phone) {
 			this.draft.phone = client.phone || "";
 		}
 		this.renderClient();
@@ -532,7 +536,7 @@ frappehero.CollectionCall = class CollectionCall {
 				dialog.hide();
 				frappe.show_alert({ message: __("Statement sent to {0}", [result.recipient]), indicator: "green" });
 				if (this.callName) {
-					await this.loadClient();
+					await this.loadClient({ keepDraft: true });
 				}
 			},
 		});
@@ -581,7 +585,7 @@ frappehero.CollectionCall = class CollectionCall {
 					raise_dispute: values.raise_dispute ? 1 : 0,
 				});
 				frappe.show_alert({ message: __("{0} {1} created", [report.report_type, report.name]), indicator: "green" });
-				await this.loadClient();
+				await this.loadClient({ keepDraft: true });
 			},
 			__("Claim or Incident"),
 			__("Create")
@@ -660,7 +664,7 @@ frappehero.CollectionCall = class CollectionCall {
 					source_module: "Collections Desk",
 				});
 				frappe.show_alert({ message: __("Dispute opened for {0}", [invoice]), indicator: "green" });
-				await this.loadClient();
+				await this.loadClient({ keepDraft: true });
 			},
 			__("Raise Dispute"),
 			__("Raise")

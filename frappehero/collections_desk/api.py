@@ -10,6 +10,7 @@ from frappe.utils import now, today
 from frappehero.collections_desk.logic import (
 	CollectionError,
 	allocate_receipt,
+	assert_invoice_for_customer,
 	assemble_client,
 	build_queue,
 	dispute_from_report,
@@ -199,6 +200,7 @@ def create_report(
 	_staff()
 	company_name, customer_name = _party(company, customer)
 	_require_customer(customer_name)
+	invoice_name = _require_invoice(company_name, customer_name, sales_invoice, submitted=as_flag(raise_dispute))
 	try:
 		fields = normalize_report(
 			{
@@ -207,7 +209,7 @@ def create_report(
 				"report_type": report_type,
 				"report_date": today(),
 				"summary": summary,
-				"sales_invoice": sales_invoice,
+				"sales_invoice": invoice_name,
 				"amount": amount,
 				"collection_call": clean_text(call_name),
 				"status": "Open",
@@ -298,6 +300,7 @@ def record_payment(
 def _raise_dispute(doc) -> str:
 	from frappehero.dispute_desk.api import raise_dispute
 
+	_require_invoice(doc.company, doc.customer, doc.sales_invoice, submitted=True)
 	try:
 		request = dispute_from_report(doc.as_dict())
 	except CollectionError as exc:
@@ -325,6 +328,29 @@ def _stamp_call(name, company, customer, values) -> None:
 	for key, value in values.items():
 		setattr(doc, key, value)
 	doc.save(ignore_permissions=True)
+
+
+def _require_invoice(company, customer, sales_invoice, submitted=False) -> str:
+	"""Return the invoice name when it belongs to this customer. Blank stays blank."""
+	name = clean_text(sales_invoice)
+	if not name:
+		return ""
+	if not frappe.db.exists("Sales Invoice", name):
+		frappe.throw(_("Sales Invoice {0} was not found.").format(name))
+	row = frappe.db.get_value("Sales Invoice", name, ["company", "customer", "docstatus"], as_dict=True)
+	try:
+		assert_invoice_for_customer(
+			name,
+			company,
+			customer,
+			row.company,
+			row.customer,
+			docstatus=row.docstatus,
+			submitted=submitted,
+		)
+	except CollectionError as exc:
+		frappe.throw(_(str(exc)))
+	return name
 
 
 def _party(company, customer):
