@@ -861,7 +861,7 @@
 
 .fh-call-grid {
 	display: grid;
-	grid-template-columns: minmax(240px, 320px) minmax(0, 1fr) minmax(260px, 320px);
+	grid-template-columns: minmax(240px, 300px) minmax(0, 1fr);
 	gap: 0;
 	align-items: start;
 	min-width: 0;
@@ -869,8 +869,7 @@
 }
 
 .fh-call-queue,
-.fh-call-file,
-.fh-call-log {
+.fh-call-stage {
 	min-width: 0;
 	max-height: calc(100vh - 210px);
 	overflow-x: hidden;
@@ -878,11 +877,46 @@
 	padding-top: 12px;
 }
 
-.fh-call-file,
-.fh-call-log {
+.fh-call-stage {
 	border-left: 1px solid var(--border-color);
 	padding-left: 24px;
 	padding-right: 8px;
+}
+
+.fh-call-file,
+.fh-call-log {
+	min-width: 0;
+}
+
+.fh-call-sticky {
+	position: sticky;
+	top: 0;
+	z-index: 2;
+	margin: -12px 0 12px;
+	padding: 12px 0 10px;
+	background: var(--fg-color, var(--bg-color, #fff));
+	border-bottom: 1px solid var(--border-color);
+}
+
+.fh-call-tools {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	align-items: center;
+	margin-left: auto;
+}
+
+.fh-call-tools .inner-group-button,
+.fh-call-tools .custom-btn-group {
+	position: relative;
+}
+
+.fh-call-identity:empty {
+	display: none;
+}
+
+.fh-call-sticky:not(:has(.fh-call-head)) {
+	display: none;
 }
 
 .fh-call-queue {
@@ -988,6 +1022,13 @@
 	overflow-x: auto;
 }
 
+.fh-call-boards {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 4px 32px;
+	align-items: start;
+}
+
 .fh-call-section h3,
 .fh-call-log h3 {
 	margin-bottom: 8px;
@@ -1016,6 +1057,16 @@
 	width: 100%;
 }
 
+.fh-call-fields {
+	display: grid;
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	gap: 0 16px;
+}
+
+.fh-call-notes {
+	grid-column: 1 / -1;
+}
+
 .fh-call-pair {
 	display: grid;
 	grid-template-columns: 1fr 1fr;
@@ -1023,7 +1074,7 @@
 }
 
 .fh-call-log textarea {
-	min-height: 72px;
+	min-height: 48px;
 	resize: vertical;
 }
 
@@ -1092,6 +1143,7 @@
 		grid-template-columns: 1fr 1fr;
 	}
 
+	.fh-call-stage,
 	.fh-call-file,
 	.fh-call-log {
 		border-left: 0;
@@ -1103,8 +1155,14 @@
 		max-height: 38vh;
 	}
 
+	.fh-call-fields,
+	.fh-call-boards,
 	.fh-call-pair {
 		grid-template-columns: 1fr;
+	}
+
+	.fh-call-notes {
+		grid-column: auto;
 	}
 
 	.fh-stats {
