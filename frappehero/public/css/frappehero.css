@@ -791,7 +791,8 @@
 }
 
 
-.fh-call {
+.fh-call,
+.fh-call-dialog {
 	--fh-line: var(--border-color, #e6e6e6);
 	--fh-card: var(--fg-color, #fff);
 	--fh-ink: var(--text-color, #1c1c1c);
@@ -799,6 +800,10 @@
 	--fh-soft: var(--bg-color, #f6f6f4);
 	--fh-control: var(--control-bg, #f1f1ef);
 	--fh-hover: var(--fg-hover-color, #f3f4f3);
+	color: var(--fh-ink);
+}
+
+.fh-call {
 	display: flex;
 	flex-direction: column;
 	gap: 16px;
@@ -806,7 +811,6 @@
 	width: 100%;
 	max-width: 1320px;
 	margin: 0 auto;
-	color: var(--fh-ink);
 }
 
 .layout-main-section.fh-page:has(.fh-call) {
