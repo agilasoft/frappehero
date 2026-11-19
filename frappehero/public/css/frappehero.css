@@ -828,31 +828,23 @@
 	color: var(--fh-muted);
 }
 
-.fh-call-till {
+.fh-call-bar {
 	position: relative;
-	z-index: 3;
-	display: grid;
-	grid-template-columns: minmax(0, 1fr) auto;
-	gap: 20px;
-	align-items: end;
+	z-index: 4;
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
 	padding: 16px 18px;
 	border: 1px solid var(--fh-line);
 	border-radius: 14px;
 	background: var(--fh-card);
 }
 
-.fh-call-till-fields {
+.fh-call-bar-main {
 	display: grid;
-	grid-template-columns: minmax(260px, 1.3fr) minmax(180px, 1fr) auto;
-	gap: 12px;
-	align-items: start;
-}
-
-.fh-call-company-col {
-	display: flex;
-	flex-direction: column;
-	gap: 8px;
-	min-width: 0;
+	grid-template-columns: minmax(220px, 320px) minmax(0, 1fr);
+	gap: 16px;
+	align-items: end;
 }
 
 .fh-call .fh-company .frappe-control,
@@ -902,6 +894,12 @@
 	margin: 0;
 }
 
+.fh-call-show {
+	flex-direction: row;
+	flex-wrap: wrap;
+	gap: 8px 14px;
+}
+
 .fh-call-show .fh-check {
 	font-size: 13px;
 	font-weight: 600;
@@ -916,20 +914,20 @@
 }
 
 .fh-call-tools .inner-group-button,
-.fh-call-tools .custom-btn-group {
+.fh-call-tools .custom-btn-group,
+.fh-call-tools .btn {
 	position: relative;
+	flex: none;
 }
 
-.fh-call-movement {
-	min-width: 360px;
+.fh-call-tools .fh-call-find {
+	margin-left: auto;
 }
 
-.fh-call-scope {
-	margin: -2px 0 8px;
-	font-size: 12px;
-	font-weight: 500;
-	line-height: 1.35;
-	color: var(--fh-muted);
+.fh-call-tools .fh-call-customers[aria-pressed="true"] {
+	background: var(--fh-control);
+	border-color: var(--fh-ink);
+	color: var(--fh-ink);
 }
 
 .fh-call-summary {
@@ -967,64 +965,54 @@
 	white-space: nowrap;
 }
 
-.fh-call-lanes {
+.fh-call-workspace {
 	display: grid;
-	grid-template-columns: repeat(3, minmax(0, 1fr));
-	gap: 4px;
-	padding: 4px;
-	border: 1px solid var(--fh-line);
-	border-radius: 14px;
-	background: var(--fh-control);
+	grid-template-columns: minmax(0, 1fr);
+	gap: 16px;
+	align-items: start;
+	min-width: 0;
 }
 
-.fh-call-lane,
+.fh-call-workspace.is-open {
+	grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
+}
+
+.fh-call-side {
+	display: none;
+	flex-direction: column;
+	min-width: 0;
+	max-height: calc(100vh - 230px);
+	border: 1px solid var(--fh-line);
+	border-radius: 14px;
+	background: var(--fh-card);
+	overflow: hidden;
+}
+
+.fh-call-workspace.is-open .fh-call-side {
+	display: flex;
+}
+
+.fh-call-side-head {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	padding: 14px 14px 10px;
+	border-bottom: 1px solid var(--fh-line);
+}
+
 .fh-call-row {
 	font: inherit;
 	color: var(--fh-ink);
 	cursor: pointer;
 }
 
-.fh-call-lane {
-	border: 0;
-	border-radius: 10px;
-	background: transparent;
-	padding: 10px 14px;
-	text-align: left;
-}
-
-.fh-call-lane:hover,
 .fh-call-row:hover {
 	background: var(--fh-hover);
 }
 
-.fh-call-lane.is-active {
-	background: var(--fh-card);
-	box-shadow: 0 1px 2px rgba(20, 20, 20, 0.06), 0 0 0 1px var(--fh-line);
-}
-
-.fh-call-lane:focus-visible,
 .fh-call-row:focus-visible {
 	outline: 2px solid var(--primary, #2490ef);
 	outline-offset: 2px;
-}
-
-.fh-call-lane-title {
-	display: block;
-	font-size: 14px;
-	font-weight: 700;
-}
-
-.fh-call-lane-hint {
-	display: block;
-	margin-top: 2px;
-	font-size: 12px;
-	font-weight: 500;
-	color: var(--fh-muted);
-}
-
-.fh-call-lane.is-active .fh-call-lane-hint {
-	color: var(--fh-ink);
-	opacity: 0.72;
 }
 
 .fh-call-ticket {
@@ -1075,9 +1063,8 @@
 .fh-call-list {
 	display: flex;
 	flex-direction: column;
-	max-height: min(640px, 70vh);
+	min-height: 0;
 	overflow: auto;
-	border-radius: 14px;
 }
 
 .fh-call-row {
@@ -1279,22 +1266,14 @@
 }
 
 @media (max-width: 1200px) {
-	.fh-call-till {
+	.fh-call-bar-main,
+	.fh-call-workspace.is-open {
 		grid-template-columns: 1fr;
 	}
 
-	.fh-call-till-fields {
-		grid-template-columns: 1fr;
-	}
-
-	.fh-call-movement,
-	.fh-call-scope,
-	.fh-call-till-main,
-	.fh-call-till-fields,
 	.fh-call-summary {
 		width: 100%;
 		min-width: 0;
-		max-width: none;
 	}
 }
 
@@ -1303,7 +1282,10 @@
 		padding: 16px;
 	}
 
-	.fh-call-lanes,
+	.fh-call-side {
+		max-height: 46vh;
+	}
+
 	.fh-call-fields,
 	.fh-call-boards {
 		display: flex;
@@ -1341,4 +1323,46 @@
 	.fh-call-summary {
 		grid-template-columns: 1fr;
 	}
+
+	.fh-call-tools .fh-call-find {
+		margin-left: 0;
+	}
+}
+
+.fh-call-dialog {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+
+.fh-call-dialog-search {
+	display: flex;
+	gap: 8px;
+	align-items: center;
+}
+
+.fh-call-dialog-search .form-control {
+	flex: 1;
+	min-width: 0;
+	height: 36px;
+}
+
+.fh-call-dialog-list {
+	max-height: 420px;
+	overflow: auto;
+	border: 1px solid var(--border-color, #e6e6e6);
+	border-radius: 10px;
+}
+
+.fh-call-dialog-list .fh-call-row {
+	width: 100%;
+}
+
+.fh-call-dialog-hint,
+.fh-call-side .fh-empty {
+	margin: 0;
+	padding: 28px 16px;
+	text-align: center;
+	color: var(--text-muted, #6d6d6d);
+	font-size: 13px;
 }

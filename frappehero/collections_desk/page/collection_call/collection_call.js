@@ -33,55 +33,37 @@ frappehero.CollectionCall = class CollectionCall {
 		this.picked = new Set();
 		this.draft = this.emptyDraft();
 		this.filters = { text: "", overdue_only: 0, followups_only: 0, mine: 0 };
-		this.view = "queue";
+		this.sidebar = false;
 		this.page.main.addClass("fh-page");
 		this.page.main.html(`
 			<div class="fh-app fh-call">
-				<section class="fh-call-till">
-					<div class="fh-call-till-main">
-						<p class="fh-call-eyebrow">${__("Queue")}</p>
-						<div class="fh-call-till-fields">
-							<div class="fh-call-company-col">
-								<div class="fh-company"></div>
-								<div class="fh-call-tools"></div>
-							</div>
+				<section class="fh-call-bar">
+					<div class="fh-call-tools"></div>
+					<div class="fh-call-bar-main">
+						<div class="fh-company"></div>
+						<div class="fh-call-summary"></div>
+					</div>
+				</section>
+				<div class="fh-call-workspace">
+					<aside class="fh-call-side">
+						<div class="fh-call-side-head">
 							<label class="fh-call-search-field">${__("Search")}
-								<input type="search" class="fh-search" placeholder="${__("Name, group, outcome")}">
+								<input type="search" class="fh-search" placeholder="${__("Customer, group, outcome")}">
 							</label>
 							<div class="fh-call-show">
-								<span>${__("Show")}</span>
 								<label class="fh-check"><input type="checkbox" class="fh-overdue"> ${__("Overdue")}</label>
 								<label class="fh-check"><input type="checkbox" class="fh-follow"> ${__("Follow-ups due")}</label>
 								<label class="fh-check"><input type="checkbox" class="fh-mine"> ${__("My calls")}</label>
 							</div>
 						</div>
-					</div>
-					<div class="fh-call-movement">
-						<p class="fh-call-eyebrow">${__("Today")}</p>
-						<p class="fh-call-scope">${__("Customers still to call")}</p>
-						<div class="fh-call-summary"></div>
-					</div>
-				</section>
-				<div class="fh-call-lanes" role="tablist">
-					<button type="button" class="fh-call-lane is-active" data-view="queue" role="tab" aria-selected="true">
-						<span class="fh-call-lane-title">${__("To call")}</span>
-						<span class="fh-call-lane-hint">${__("Customers with a balance")}</span>
-					</button>
-					<button type="button" class="fh-call-lane" data-view="customer" role="tab" aria-selected="false">
-						<span class="fh-call-lane-title">${__("Customer")}</span>
-						<span class="fh-call-lane-hint">${__("Balance, invoices, and history")}</span>
-					</button>
-					<button type="button" class="fh-call-lane" data-view="call" role="tab" aria-selected="false">
-						<span class="fh-call-lane-title">${__("This call")}</span>
-						<span class="fh-call-lane-hint">${__("Log the outcome")}</span>
-					</button>
-				</div>
-				<div class="fh-call-body">
+						<div class="fh-call-list"></div>
+					</aside>
 					<section class="fh-call-ticket"></section>
 				</div>
 			</div>
 		`);
 		this.ticketEl = this.page.main.find(".fh-call-ticket");
+		this.listEl = this.page.main.find(".fh-call-list");
 		this.composerEl = this.ticketEl;
 		this.statsEl = this.page.main.find(".fh-call-summary");
 		this.companyControl = frappe.ui.form.make_control({
@@ -103,14 +85,26 @@ frappehero.CollectionCall = class CollectionCall {
 			render_input: true,
 		});
 		this.companyControl.set_value(frappe.defaults.get_user_default("Company"));
+		const tools = this.page.main.find(".fh-call-tools");
 		const toolbar = this.page.inner_toolbar;
-		this.page.inner_toolbar = this.page.main.find(".fh-call-tools");
+		this.page.inner_toolbar = tools;
+		tools.append(
+			`<button type="button" class="btn btn-default btn-sm ellipsis fh-call-customers" aria-pressed="false">${__("Customers")}</button>`
+		);
 		this.installMenus();
+		tools.append(
+			`<button type="button" class="btn btn-primary btn-sm ellipsis fh-call-find">${__("Call")}</button>`
+		);
 		this.page.inner_toolbar = toolbar;
+		if (this.page.add_menu_item) {
+			this.page.add_menu_item(__("Customers"), () => this.toggleSidebar());
+			this.page.add_menu_item(__("Call"), () => this.openSearch());
+		}
 		const root = this.page.main.find(".fh-call").get(0);
 		root.addEventListener("click", (event) => this.onClick(event));
 		root.addEventListener("change", (event) => this.onChange(event));
 		root.addEventListener("input", (event) => this.onInput(event));
+		this.renderSurface();
 		this.refresh();
 	}
 
@@ -198,36 +192,21 @@ frappehero.CollectionCall = class CollectionCall {
 		}
 	}
 
-	setView(view) {
-		if (!view || view === this.view) {
-			return;
+	toggleSidebar() {
+		this.sidebar = !this.sidebar;
+		this.page.main.find(".fh-call-workspace").toggleClass("is-open", this.sidebar);
+		this.page.main.find(".fh-call-customers").attr("aria-pressed", this.sidebar ? "true" : "false");
+		if (this.sidebar) {
+			this.renderQueueList();
+			const field = this.page.main.find(".fh-search");
+			if (field.length) {
+				field.trigger("focus");
+			}
 		}
-		if (this.view === "call") {
-			this.readDraft();
-		}
-		this.view = view;
-		this.syncLanes();
-		this.renderSurface();
-	}
-
-	syncLanes() {
-		this.page.main.find(".fh-call-lane").each((_, el) => {
-			const on = el.dataset.view === this.view;
-			el.classList.toggle("is-active", on);
-			el.setAttribute("aria-selected", on ? "true" : "false");
-		});
 	}
 
 	renderSurface() {
-		if (this.view === "customer") {
-			this.renderClient();
-			return;
-		}
-		if (this.view === "call") {
-			this.renderComposer();
-			return;
-		}
-		this.renderQueueList();
+		this.renderClient();
 	}
 
 	emptyPanel(kicker, title, body) {
@@ -242,14 +221,11 @@ frappehero.CollectionCall = class CollectionCall {
 		if (!customer) {
 			return;
 		}
-		if (this.view === "call") {
-			this.readDraft();
-		}
+		this.readDraft();
 		const same = this.customer === customer && this.client;
-		this.view = "customer";
-		this.syncLanes();
 		if (same) {
 			this.renderClient();
+			this.renderQueueList();
 			return;
 		}
 		this.customer = customer;
@@ -302,33 +278,27 @@ frappehero.CollectionCall = class CollectionCall {
 				)
 				.join("")
 		);
-		if (this.view === "queue") {
-			this.renderQueueList();
-		}
+		this.renderQueueList();
+	}
+
+	queueRow(row) {
+		const due = row.oldest_due ? __("Due {0}", [this.date(row.oldest_due)]) : __("No invoice");
+		const follow = row.follow_up_due
+			? __("Follow up {0}", [this.date(row.next_follow_up)])
+			: row.last_outcome || "";
+		const meta = [due, follow].filter(Boolean).join(" · ");
+		const selected = row.customer === this.customer ? " is-selected" : "";
+		return `
+			<button type="button" class="fh-call-row${selected}" data-action="open" data-customer="${frappehero.esc(row.customer)}">
+				<span class="fh-call-row-name">${frappehero.esc(row.customer_name || row.customer)}</span>
+				<span class="fh-call-row-amt">${frappehero.esc(this.money(row.outstanding))}</span>
+				<span class="fh-call-row-meta">${frappehero.esc(meta)}</span>
+			</button>`;
 	}
 
 	renderQueueList() {
-		const rows = (this.rows || [])
-			.map((row) => {
-				const due = row.oldest_due ? __("Due {0}", [this.date(row.oldest_due)]) : __("No invoice");
-				const follow = row.follow_up_due
-					? __("Follow up {0}", [this.date(row.next_follow_up)])
-					: row.last_outcome || "";
-				const meta = [due, follow].filter(Boolean).join(" · ");
-				const selected = row.customer === this.customer ? " is-selected" : "";
-				return `
-				<button type="button" class="fh-call-row${selected}" data-action="open" data-customer="${frappehero.esc(row.customer)}">
-					<span class="fh-call-row-name">${frappehero.esc(row.customer_name || row.customer)}</span>
-					<span class="fh-call-row-amt">${frappehero.esc(this.money(row.outstanding))}</span>
-					<span class="fh-call-row-meta">${frappehero.esc(meta)}</span>
-				</button>`;
-			})
-			.join("");
-		this.ticketEl.html(
-			rows
-				? `<div class="fh-call-list">${rows}</div>`
-				: this.emptyPanel(__("To call"), __("No customers"), __("Nothing matches these filters."))
-		);
+		const rows = (this.rows || []).map((row) => this.queueRow(row)).join("");
+		this.listEl.html(rows || `<p class="fh-empty">${__("No customers match this search.")}</p>`);
 	}
 
 	amountTile(label, value) {
@@ -336,16 +306,13 @@ frappehero.CollectionCall = class CollectionCall {
 	}
 
 	renderClient() {
-		if (this.view !== "customer") {
-			return;
-		}
 		const client = this.client;
 		if (!client) {
 			this.ticketEl.html(
 				this.emptyPanel(
-					__("Customer"),
-					__("Choose a customer"),
-					__("Pick someone from To call. The panel shows the balance, the invoices, and the earlier calls.")
+					__("Collection"),
+					__("Call a customer"),
+					__("Use Call to search. Open Customers when you want the list.")
 				)
 			);
 			return;
@@ -389,6 +356,7 @@ frappehero.CollectionCall = class CollectionCall {
 					${this.amountTile(__("Amount due"), due)}
 					${this.amountTile(__("Disputed"), disputed)}
 				</dl>
+				${this.callFields()}
 				<section class="fh-call-section"><h3>${__("Account")}</h3><dl class="fh-call-amounts">${facts}</dl></section>
 				<section class="fh-call-section"><h3>${__("Aging")}</h3><dl class="fh-call-amounts">${aging}</dl></section>
 				${this.section(__("Open invoices"), this.invoiceTable(client.invoices))}
@@ -476,51 +444,96 @@ frappehero.CollectionCall = class CollectionCall {
 		return `<table class="fh-matrix"><thead><tr><th>${__("Report")}</th><th>${__("Type")}</th><th>${__("Status")}</th><th>${__("Summary")}</th></tr></thead><tbody>${body || `<tr><td colspan="4">${__("No claim or incident.")}</td></tr>`}</tbody></table>`;
 	}
 
-	renderComposer() {
-		if (this.view !== "call") {
-			return;
-		}
-		if (!this.client) {
-			this.ticketEl.html(
-				this.emptyPanel(
-					__("This call"),
-					__("Log a call"),
-					__("Choose a customer first. Create call records the outcome, and later actions stamp that call.")
-				)
-			);
-			return;
-		}
+	callFields() {
 		const draft = this.draft;
-		const client = this.client;
 		const outcomes = ["Reached", "No Answer", "Busy", "Wrong Number", "Voicemail", "Promised", "Refused", "Disputed", "Callback"]
 			.map((outcome) => `<option value="${outcome}" ${draft.outcome === outcome ? "selected" : ""}>${__(outcome)}</option>`)
 			.join("");
 		const logging = this.callName
 			? __("Logging onto {0}.", [this.callName])
 			: __("Create call logs this call. Later actions stamp that call.");
-		this.ticketEl.html(`
-			<div class="fh-call-sheet fh-call-log">
-				<p class="fh-call-kicker">${__("This call")}</p>
-				<h2>${frappehero.esc(client.customer_name || client.customer)}</h2>
+		return `
+			<section class="fh-call-section fh-call-log">
+				<h3>${__("This call")}</h3>
 				<p class="fh-call-meta">${frappehero.esc(logging)}</p>
 				<div class="fh-call-fields">
-				<label class="fh-field">${__("Direction")}
-					<select class="fh-direction">
-						<option value="Outbound" ${draft.direction === "Outbound" ? "selected" : ""}>${__("Outbound")}</option>
-						<option value="Inbound" ${draft.direction === "Inbound" ? "selected" : ""}>${__("Inbound")}</option>
-					</select>
-				</label>
-				<label class="fh-field">${__("Call time")}<input type="datetime-local" class="fh-call-time" value="${frappehero.esc(draft.call_datetime || "")}"></label>
-				<label class="fh-field">${__("Phone")}<input type="text" class="fh-phone" value="${frappehero.esc(draft.phone || "")}"></label>
-				<label class="fh-field">${__("Contact")}<input type="text" class="fh-contact" value="${frappehero.esc(draft.contact_person || "")}"></label>
-				<label class="fh-field">${__("Outcome")}<select class="fh-outcome"><option value="">${__("Choose")}</option>${outcomes}</select></label>
-				<label class="fh-field">${__("Promise amount")}<input type="text" class="fh-promise-amount" inputmode="decimal" value="${frappehero.esc(draft.promise_amount || "")}"></label>
-				<label class="fh-field">${__("Promise date")}<input type="date" class="fh-promise-date" value="${frappehero.esc(draft.promise_date || "")}"></label>
-				<label class="fh-field">${__("Next follow-up")}<input type="date" class="fh-follow-date" value="${frappehero.esc(draft.next_follow_up || "")}"></label>
-				<label class="fh-field fh-call-notes">${__("Notes")}<textarea class="fh-notes">${frappehero.esc(draft.notes || "")}</textarea></label>
+					<label class="fh-field">${__("Direction")}
+						<select class="fh-direction">
+							<option value="Outbound" ${draft.direction === "Outbound" ? "selected" : ""}>${__("Outbound")}</option>
+							<option value="Inbound" ${draft.direction === "Inbound" ? "selected" : ""}>${__("Inbound")}</option>
+						</select>
+					</label>
+					<label class="fh-field">${__("Call time")}<input type="datetime-local" class="fh-call-time" value="${frappehero.esc(draft.call_datetime || "")}"></label>
+					<label class="fh-field">${__("Phone")}<input type="text" class="fh-phone" value="${frappehero.esc(draft.phone || "")}"></label>
+					<label class="fh-field">${__("Contact")}<input type="text" class="fh-contact" value="${frappehero.esc(draft.contact_person || "")}"></label>
+					<label class="fh-field">${__("Outcome")}<select class="fh-outcome"><option value="">${__("Choose")}</option>${outcomes}</select></label>
+					<label class="fh-field">${__("Promise amount")}<input type="text" class="fh-promise-amount" inputmode="decimal" value="${frappehero.esc(draft.promise_amount || "")}"></label>
+					<label class="fh-field">${__("Promise date")}<input type="date" class="fh-promise-date" value="${frappehero.esc(draft.promise_date || "")}"></label>
+					<label class="fh-field">${__("Next follow-up")}<input type="date" class="fh-follow-date" value="${frappehero.esc(draft.next_follow_up || "")}"></label>
+					<label class="fh-field fh-call-notes">${__("Notes")}<textarea class="fh-notes">${frappehero.esc(draft.notes || "")}</textarea></label>
 				</div>
+			</section>`;
+	}
+
+	searchHint() {
+		return `<p class="fh-call-dialog-hint">${__("Search for a customer, a group, or the last outcome.")}</p>`;
+	}
+
+	openSearch() {
+		const dialog = new frappe.ui.Dialog({
+			title: __("Call a customer"),
+			size: "large",
+		});
+		dialog.$body.html(`
+			<div class="fh-call-dialog">
+				<div class="fh-call-dialog-search">
+					<input type="search" class="form-control fh-call-query" placeholder="${__("Customer, group, outcome")}" aria-label="${__("Search")}">
+					<button type="button" class="btn btn-primary btn-sm fh-call-query-go">${__("Search")}</button>
+				</div>
+				<div class="fh-call-dialog-list">${this.searchHint()}</div>
 			</div>
 		`);
+		const paint = (rows) => {
+			const html = (rows || []).map((row) => this.queueRow(row)).join("");
+			dialog.$body.find(".fh-call-dialog-list").html(
+				html || `<p class="fh-call-dialog-hint">${__("No customers match this search.")}</p>`
+			);
+		};
+		const run = async () => {
+			const text = (dialog.$body.find(".fh-call-query").val() || "").trim();
+			if (!text) {
+				dialog.$body.find(".fh-call-dialog-list").html(this.searchHint());
+				return;
+			}
+			dialog.$body.find(".fh-call-dialog-list").html(`<p class="fh-call-dialog-hint">${__("Searching…")}</p>`);
+			const result = await frappehero.call("frappehero.collections_desk.api.get_queue", {
+				company: this.company(),
+				text,
+				overdue_only: this.filters.overdue_only,
+				followups_only: this.filters.followups_only,
+				mine: this.filters.mine,
+			});
+			paint((result && result.rows) || []);
+		};
+		dialog.$body.on("click", ".fh-call-query-go", () => run());
+		dialog.$body.on("keydown", ".fh-call-query", (event) => {
+			if (event.key === "Enter") {
+				event.preventDefault();
+				run();
+			}
+		});
+		let timer = 0;
+		dialog.$body.on("input", ".fh-call-query", () => {
+			clearTimeout(timer);
+			timer = setTimeout(run, 200);
+		});
+		dialog.$body.on("click", "[data-action='open']", async (event) => {
+			const customer = event.currentTarget.getAttribute("data-customer");
+			dialog.hide();
+			await this.openCustomer(customer);
+		});
+		dialog.show();
+		dialog.$body.find(".fh-call-query").trigger("focus");
 	}
 
 	readDraft() {
@@ -570,9 +583,12 @@ frappehero.CollectionCall = class CollectionCall {
 	}
 
 	async onClick(event) {
-		const lane = event.target.closest(".fh-call-lane");
-		if (lane) {
-			this.setView(lane.dataset.view);
+		if (event.target.closest(".fh-call-find")) {
+			this.openSearch();
+			return;
+		}
+		if (event.target.closest(".fh-call-customers")) {
+			this.toggleSidebar();
 			return;
 		}
 		const button = event.target.closest("[data-action]");
