@@ -143,8 +143,12 @@ def _allocation_row(source, party_type, payment_currency, company_currency, paym
 	source = source or {}
 	reference_name = clean_text(source.get("reference_name"))
 	reference_doctype = clean_text(source.get("reference_doctype"))
-	invoice_amount = _invoice_allocation(source, precision)
-	if invoice_amount == 0 and not reference_name and not reference_doctype:
+	if (
+		_invoice_allocation(source, precision) == 0
+		and _entered_account_amount(source, precision) == 0
+		and not reference_name
+		and not reference_doctype
+	):
 		return None
 	expected = _PARTY_REFERENCE[party_type]
 	label = f"{reference_doctype or 'Invoice'} {reference_name}".strip()
@@ -154,20 +158,6 @@ def _allocation_row(source, party_type, payment_currency, company_currency, paym
 		kind = "customer receipt" if party_type == CUSTOMER else "supplier payment"
 		raise MultiCurrencyPaymentError(
 			f"A {kind} allocates {expected}s. {reference_name} is a {reference_doctype}."
-		)
-	outstanding = _amount(source.get("outstanding_amount"), precision)
-	if invoice_amount == 0:
-		raise MultiCurrencyPaymentError(
-			f"Enter the allocated amount for {reference_doctype} {reference_name}."
-		)
-	if invoice_amount < 0:
-		raise MultiCurrencyPaymentError(
-			f"Allocated amount for {reference_doctype} {reference_name} cannot be negative."
-		)
-	if invoice_amount > outstanding:
-		raise MultiCurrencyPaymentError(
-			f"Allocated amount for {reference_doctype} {reference_name} cannot be greater than "
-			f"outstanding {_show(outstanding)}."
 		)
 	account = clean_text(source.get("account"))
 	if not account:
@@ -186,16 +176,29 @@ def _allocation_row(source, party_type, payment_currency, company_currency, paym
 	else:
 		invoice_booked_rate = _rate(source.get("booked_rate"), f"the booked rate on {reference_name}")
 		invoice_payment_rate = _rate(source.get("payment_rate"), f"the payment rate on {reference_name}")
-	account_amount, account_rate = _account_allocation(
-		invoice_amount,
+	invoice_amount, account_amount, account_rate = _resolve_amounts(
+		source,
 		invoice_currency,
 		account_currency,
 		company_currency,
 		invoice_booked_rate,
-		source.get("account_exchange_rate"),
 		reference_name,
 		precision,
 	)
+	outstanding = _amount(source.get("outstanding_amount"), precision)
+	if invoice_amount == 0:
+		raise MultiCurrencyPaymentError(
+			f"Enter the allocated amount for {reference_doctype} {reference_name}."
+		)
+	if invoice_amount < 0 or account_amount < 0:
+		raise MultiCurrencyPaymentError(
+			f"Allocated amount for {reference_doctype} {reference_name} cannot be negative."
+		)
+	if invoice_amount > outstanding:
+		raise MultiCurrencyPaymentError(
+			f"Allocated amount for {reference_doctype} {reference_name} cannot be greater than "
+			f"outstanding {_show(outstanding)}."
+		)
 	booked_base = _quantize(account_amount * account_rate, precision)
 	payment_base = _quantize(invoice_amount * invoice_payment_rate, precision)
 	if invoice_currency == payment_currency:
@@ -233,29 +236,107 @@ def _invoice_allocation(source, precision):
 	return _amount(raw, precision)
 
 
-def _account_allocation(
-	invoice_amount,
+def _entered_account_amount(source, precision):
+	"""Allocated Amount typed in the account currency."""
+	return _amount(source.get("allocated_amount"), precision)
+
+
+def _uses_account_basis(source) -> bool:
+	return clean_text(source.get("allocation_basis")).lower() == "account"
+
+
+def _resolve_amounts(
+	source,
+	invoice_currency,
+	account_currency,
+	company_currency,
+	invoice_booked_rate,
+	reference_name,
+	precision,
+):
+	"""Convert whichever amount the user typed into the other currency."""
+	account_rate = _account_rate(
+		invoice_currency,
+		account_currency,
+		company_currency,
+		invoice_booked_rate,
+		source.get("account_exchange_rate"),
+		reference_name,
+	)
+	if _uses_account_basis(source):
+		account_amount = _entered_account_amount(source, precision)
+		invoice_amount = _invoice_from_account(
+			account_amount,
+			invoice_currency,
+			account_currency,
+			invoice_booked_rate,
+			account_rate,
+			precision,
+		)
+		return invoice_amount, account_amount, account_rate
+	invoice_amount = _invoice_allocation(source, precision)
+	account_amount = _account_from_invoice(
+		invoice_amount,
+		invoice_currency,
+		account_currency,
+		invoice_booked_rate,
+		account_rate,
+		reference_name,
+		precision,
+	)
+	return invoice_amount, account_amount, account_rate
+
+
+def _account_rate(
 	invoice_currency,
 	account_currency,
 	company_currency,
 	invoice_booked_rate,
 	account_exchange_rate,
 	reference_name,
+):
+	if account_currency == invoice_currency:
+		return invoice_booked_rate
+	if account_currency == company_currency:
+		return Decimal(1)
+	return _rate(account_exchange_rate, f"the account on {reference_name}")
+
+
+def _account_from_invoice(
+	invoice_amount,
+	invoice_currency,
+	account_currency,
+	invoice_booked_rate,
+	account_rate,
+	reference_name,
 	precision,
 ):
-	"""Turn an invoice-currency allocation into the account-currency amount and its rate."""
 	if account_currency == invoice_currency:
-		return invoice_amount, invoice_booked_rate
-	if account_currency == company_currency:
-		return _quantize(invoice_amount * invoice_booked_rate, precision), Decimal(1)
-	account_rate = _rate(account_exchange_rate, f"the account on {reference_name}")
+		return invoice_amount
+	if account_currency != invoice_currency and account_rate == 1:
+		return _quantize(invoice_amount * invoice_booked_rate, precision)
 	invoice_base = _quantize(invoice_amount * invoice_booked_rate, precision)
 	account_amount = _quantize(invoice_base / account_rate, precision)
-	if account_amount <= 0:
+	if invoice_amount > 0 and account_amount <= 0:
 		raise MultiCurrencyPaymentError(
 			f"The allocated amount for {reference_name} is too small to post in {account_currency}."
 		)
-	return account_amount, account_rate
+	return account_amount
+
+
+def _invoice_from_account(
+	account_amount,
+	invoice_currency,
+	account_currency,
+	invoice_booked_rate,
+	account_rate,
+	precision,
+):
+	if account_currency == invoice_currency or (invoice_booked_rate == 1 and account_rate == 1):
+		return account_amount
+	if account_rate == 1:
+		return _quantize(account_amount / invoice_booked_rate, precision)
+	return _quantize((account_amount * account_rate) / invoice_booked_rate, precision)
 
 
 def _paid_amount(payment, allocated_amount, payment_currency, precision):

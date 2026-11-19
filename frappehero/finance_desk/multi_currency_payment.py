@@ -523,7 +523,12 @@ def _source_from_row(doc, row, defaults):
 	reference_name = clean_text(row.get("reference_name"))
 	reference_doctype = clean_text(row.get("reference_doctype"))
 	allocated = row.get("allocated_amount")
-	if not reference_name and not reference_doctype and not allocated:
+	if (
+		not reference_name
+		and not reference_doctype
+		and not allocated
+		and not _positive(row.get("hero_allocated_invoice_amount"))
+	):
 		return None
 	expected = _INVOICE_FIELDS[doc.party_type][0]
 	if reference_doctype and reference_doctype != expected:
@@ -553,8 +558,9 @@ def _source_from_row(doc, row, defaults):
 		row.get("hero_payment_rate"),
 		doc.posting_date,
 	)
+	basis = clean_text(row.get("hero_allocation_basis")) or "Invoice"
 	invoice_allocated = row.get("hero_allocated_invoice_amount")
-	if not _positive(invoice_allocated):
+	if basis.lower() != "account" and not _positive(invoice_allocated):
 		invoice_allocated = allocated
 	account_exchange_rate = None
 	if account.account_currency not in (invoice["currency"], defaults.default_currency):
@@ -570,6 +576,7 @@ def _source_from_row(doc, row, defaults):
 			"reference_name": invoice["name"],
 			"invoice_currency": invoice["currency"],
 			"outstanding_amount": invoice["outstanding_amount"],
+			"allocation_basis": basis,
 			"allocated_invoice_amount": invoice_allocated,
 			"allocated_amount": allocated,
 			"booked_rate": booked_rate,
