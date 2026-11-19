@@ -70,6 +70,12 @@ frappe.ui.form.on("Payment Entry Reference", {
 		const row = locals[cdt][cdn];
 		if (row) {
 			row.hero_account = "";
+			if (row.reference_name) {
+				row.hero_allocation_basis = "Invoice";
+				row._hero_ref_fill = true;
+			} else {
+				delete row._hero_ref_fill;
+			}
 		}
 		queue_preview(frm);
 	},
@@ -79,7 +85,10 @@ frappe.ui.form.on("Payment Entry Reference", {
 			return;
 		}
 		const row = locals[cdt][cdn];
-		if (row) {
+		if (row && row._hero_ref_fill && reference_fill_amount(frm, row)) {
+			row.hero_allocation_basis = "Invoice";
+			delete row._hero_ref_fill;
+		} else if (row && !row._hero_ref_fill) {
 			row.hero_allocation_basis = "Account";
 		}
 		queue_preview(frm);
@@ -176,6 +185,14 @@ function get_outstanding(frm) {
 		return;
 	}
 	load();
+}
+
+function reference_fill_amount(frm, row) {
+	const outstanding = Number(row.outstanding_amount) || 0;
+	const allocated = Number(row.allocated_amount) || 0;
+	const unallocated = Number(frm.doc.unallocated_amount) || 0;
+	const expected = unallocated > outstanding ? outstanding : unallocated;
+	return Math.abs(allocated - expected) < 0.000001 || Math.abs(allocated - outstanding) < 0.000001;
 }
 
 function queue_preview(frm) {

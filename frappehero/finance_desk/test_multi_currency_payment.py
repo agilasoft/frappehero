@@ -478,6 +478,8 @@ class TestMultiCurrencyPayment(unittest.TestCase):
 		self.assertIn("outstanding_invoices", script)
 		self.assertIn('hero_allocation_basis = "Account"', script)
 		self.assertIn('hero_allocation_basis = "Invoice"', script)
+		self.assertIn("reference_fill_amount", script)
+		self.assertIn("_hero_ref_fill", script)
 		self.assertNotIn("update_docfield_property", script)
 		account_field = install.split('"hero_allocated_account_amount"', 1)[1].split('"hero_booked_rate"', 1)[
 			0
