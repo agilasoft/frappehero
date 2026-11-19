@@ -339,7 +339,7 @@ def get_custom_fields():
 				"insert_after": "hero_invoice_amount",
 				"in_list_view": 1,
 				"columns": 2,
-				"description": "Amount of this invoice to pay, in the invoice currency. Outstanding is in this currency.",
+				"description": "Amount of this invoice to pay, in the invoice currency. Changing this converts Allocated Amount. Outstanding is in this currency.",
 			},
 			{
 				"fieldname": "hero_account",
@@ -370,7 +370,7 @@ def get_custom_fields():
 				"no_copy": 1,
 				"in_list_view": 1,
 				"columns": 2,
-				"description": "Calculated from the invoice-currency allocation and the invoice conversion rate.",
+				"description": "Account-currency amount. Read-only. It converts from Allocated Amount or Allocated (Invoice Currency).",
 			},
 			{
 				"fieldname": "hero_booked_rate",
@@ -413,6 +413,16 @@ def get_custom_fields():
 				"in_list_view": 1,
 				"columns": 2,
 				"description": "Share of the bank amount for this invoice.",
+			},
+			{
+				"fieldname": "hero_allocation_basis",
+				"label": "Allocation Basis",
+				"fieldtype": "Select",
+				"options": "Invoice\nAccount",
+				"insert_after": "hero_bank_amount",
+				"hidden": 1,
+				"default": "Invoice",
+				"no_copy": 1,
 			},
 		],
 		"Opening Invoice Creation Tool Item": [
