@@ -127,11 +127,11 @@ On a site, an open ERPNext Dunning that names the invoice is marked Resolved. Dr
 
 System Manager, Accounts Manager, and Accounts User.
 
-**Collection Call** is the collections cockpit. The queue is every customer in the company with an open sales invoice, plus anyone whose follow-up date has arrived. Follow-ups come first, then the oldest invoice. Filter to overdue balances, follow-ups that are due, or the calls you logged. Search covers the customer, the group, the territory, and the last outcome. The totals for the queue sit above it.
+**Collection Call** uses the same desk as Cashier: a register card, three lanes, and one panel. The queue is every customer in the company with an open sales invoice, plus anyone whose follow-up date has arrived. Follow-ups come first, then the oldest invoice. Filter to overdue balances, follow-ups that are due, or the calls you logged. Search covers the customer, the group, the territory, and the last outcome. Today's totals sit on the register card.
 
-The customer name stays pinned. Under that are the group, the territory, the tax id, the credit limit, the aging, and the amount still due. Open disputes stay out of the amount due the same way the statement does. The phone is a `tel:` link. The call strip is next: direction, time, number, person reached, outcome, promise, follow-up, and notes. Open invoices sit under the strip, and receipts, disputes, earlier calls, and claims sit in two columns beside each other.
+**To call** is the queue. **Customer** shows the name, the phone, the group, the territory, the tax id, the credit limit, the aging, and the amount still due. Open disputes stay out of the amount due the same way the statement does. The phone is a `tel:` link. Open invoices, receipts, disputes, earlier calls, and claims sit on that panel. **This call** is the log: direction, time, number, person reached, outcome, promise, follow-up, and notes.
 
-**Create** and **Open** are the desk's own menu buttons, in the filter bar:
+**Create** and **Open** are the desk's own menu buttons, under the company field:
 
 - **Create call** writes a **Hero Collection Call**. A promise needs an amount and a date. No Answer, Busy, Wrong Number, and Voicemail cannot carry a promise. A callback needs a follow-up date.
 - **Create statement** previews the statement and opens Statement of Account for that company and customer.
