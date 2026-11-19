@@ -500,6 +500,7 @@ frappehero.CollectionCall = class CollectionCall {
 			);
 		};
 		const run = async () => {
+			const request = (dialog.searchRequest = (dialog.searchRequest || 0) + 1);
 			const text = (dialog.$body.find(".fh-call-query").val() || "").trim();
 			if (!text) {
 				dialog.$body.find(".fh-call-dialog-list").html(this.searchHint());
@@ -513,6 +514,9 @@ frappehero.CollectionCall = class CollectionCall {
 				followups_only: this.filters.followups_only,
 				mine: this.filters.mine,
 			});
+			if (request !== dialog.searchRequest) {
+				return;
+			}
 			paint((result && result.rows) || []);
 		};
 		dialog.$body.on("click", ".fh-call-query-go", () => run());
