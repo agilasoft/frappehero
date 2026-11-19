@@ -70,11 +70,38 @@ frappe.ui.form.on("Payment Entry Reference", {
 		const row = locals[cdt][cdn];
 		if (row) {
 			row.hero_account = "";
+			if (row.reference_name) {
+				row.hero_allocation_basis = "Invoice";
+				row._hero_ref_fill = true;
+			} else {
+				delete row._hero_ref_fill;
+			}
 		}
 		queue_preview(frm);
 	},
 
-	allocated_amount(frm) {
+	allocated_amount(frm, cdt, cdn) {
+		if (frm._hero_multi_lock) {
+			return;
+		}
+		const row = locals[cdt][cdn];
+		if (row && row._hero_ref_fill && reference_fill_amount(frm, row)) {
+			row.hero_allocation_basis = "Invoice";
+			delete row._hero_ref_fill;
+		} else if (row && !row._hero_ref_fill) {
+			row.hero_allocation_basis = "Account";
+		}
+		queue_preview(frm);
+	},
+
+	hero_allocated_invoice_amount(frm, cdt, cdn) {
+		if (frm._hero_multi_lock) {
+			return;
+		}
+		const row = locals[cdt][cdn];
+		if (row) {
+			row.hero_allocation_basis = "Invoice";
+		}
 		queue_preview(frm);
 	},
 
@@ -142,13 +169,14 @@ function get_outstanding(frm) {
 				message.references.forEach((row) => {
 					const child = frm.add_child("references");
 					Object.assign(child, row);
+					child.hero_allocation_basis = "Invoice";
 				});
 				apply_header(frm, message);
-				frm._hero_multi_lock = false;
 				frm.refresh_field("references");
 				frm.refresh_fields();
-				frm.dirty();
 				frm._hero_multi_signature = input_signature(frm);
+				frm._hero_multi_lock = false;
+				frm.dirty();
 			},
 		});
 	};
@@ -159,8 +187,16 @@ function get_outstanding(frm) {
 	load();
 }
 
+function reference_fill_amount(frm, row) {
+	const outstanding = Number(row.outstanding_amount) || 0;
+	const allocated = Number(row.allocated_amount) || 0;
+	const unallocated = Number(frm.doc.unallocated_amount) || 0;
+	const expected = unallocated > outstanding ? outstanding : unallocated;
+	return Math.abs(allocated - expected) < 0.000001 || Math.abs(allocated - outstanding) < 0.000001;
+}
+
 function queue_preview(frm) {
-	if (frm._hero_multi_lock || frm.doc.docstatus || !spans_accounts(frm)) {
+	if (frm._hero_multi_lock || frm.doc.docstatus || !needs_custom(frm)) {
 		return;
 	}
 	if (frm._hero_multi_timer) {
@@ -173,7 +209,7 @@ function queue_preview(frm) {
 }
 
 function preview(frm) {
-	if (!spans_accounts(frm) || !bank_account(frm)) {
+	if (!needs_custom(frm) || !bank_account(frm)) {
 		return;
 	}
 	const signature = input_signature(frm);
@@ -199,15 +235,28 @@ function preview(frm) {
 			frm._hero_multi_lock = true;
 			apply_header(frm, message);
 			apply_rows(frm, message.references);
-			frm._hero_multi_lock = false;
 			frm.refresh_fields();
 			frm._hero_multi_signature = input_signature(frm);
+			frm._hero_multi_lock = false;
 		})
 		.catch(() => {
 			if (frm._hero_multi_token === token) {
 				frm._hero_multi_signature = "";
 			}
 		});
+}
+
+function needs_custom(frm) {
+	if (spans_accounts(frm)) {
+		return true;
+	}
+	return (frm.doc.references || []).some(
+		(row) =>
+			row.hero_invoice_currency &&
+			row.hero_account_currency &&
+			row.hero_invoice_currency !== row.hero_account_currency &&
+			(row.reference_name || row.hero_allocated_invoice_amount || row.allocated_amount)
+	);
 }
 
 function spans_accounts(frm) {
@@ -274,6 +323,8 @@ function input_signature(frm) {
 			row.hero_account || "",
 			row.reference_doctype || "",
 			row.reference_name || "",
+			row.hero_allocation_basis || "",
+			row.hero_allocated_invoice_amount || 0,
 			row.allocated_amount || 0,
 			row.hero_payment_rate || 0,
 		]),

@@ -1,0 +1,17 @@
+{
+  "name": "Proof of Payment",
+  "short_name": "Proof",
+  "start_url": "/proof-of-payment",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f3f6f8",
+  "theme_color": "#0a4f86",
+  "icons": [
+    {
+      "src": "/assets/frappehero/images/logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
