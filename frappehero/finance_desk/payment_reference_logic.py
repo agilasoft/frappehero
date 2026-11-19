@@ -27,6 +27,8 @@ def source_from_document(row):
 	source = {"currency": currency, "grand_total": row.get("grand_total")}
 	if "rounded_total" in row:
 		source["rounded_total"] = row.get("rounded_total")
+	if "conversion_rate" in row:
+		source["conversion_rate"] = row.get("conversion_rate")
 	return source
 
 
@@ -126,12 +128,13 @@ def columns_for_references(references, sources):
 		source = sources.get((doctype, name)) if doctype and name else None
 		currency = clean_text((source or {}).get("currency"))
 		if not currency:
-			columns.append({"hero_invoice_currency": "", "hero_invoice_amount": 0.0})
+			columns.append({"hero_invoice_currency": "", "hero_invoice_amount": 0.0, "conversion_rate": 0.0})
 			continue
 		columns.append(
 			{
 				"hero_invoice_currency": currency,
 				"hero_invoice_amount": invoice_amount(source),
+				"conversion_rate": _number((source or {}).get("conversion_rate")),
 			}
 		)
 	return columns

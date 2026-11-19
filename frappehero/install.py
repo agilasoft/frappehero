@@ -38,8 +38,45 @@ def ensure_custom_fields():
 	if not frappe.db.exists("DocType", "Payment Entry Reference"):
 		fields.pop("Payment Entry Reference", None)
 	create_custom_fields(fields, ignore_validate=True, update=True)
+	ensure_payment_reference_fields()
 	ensure_opening_invoice_extension()
 	ensure_sales_invoice_dispute_tab()
+
+
+def ensure_payment_reference_fields():
+	"""The invoice already names its account. The user allocates in the bank or invoice currency."""
+	if not frappe.db.exists("DocType", "Payment Entry Reference"):
+		return
+	from frappe.custom.doctype.property_setter.property_setter import make_property_setter
+
+	meta = frappe.get_meta("Payment Entry Reference")
+	setters = []
+	if meta.has_field("account"):
+		setters.append(("account", "hidden", "1", "Check"))
+		setters.append(("account", "read_only", "1", "Check"))
+	if meta.has_field("allocated_amount"):
+		setters.append(("allocated_amount", "hidden", "1", "Check"))
+		setters.append(("allocated_amount", "read_only", "1", "Check"))
+		setters.append(("allocated_amount", "in_list_view", "0", "Check"))
+	for fieldname, prop, value, property_type in setters:
+		make_property_setter(
+			"Payment Entry Reference",
+			fieldname,
+			prop,
+			value,
+			property_type,
+			validate_fields_for_doctype=False,
+		)
+	if not setters:
+		return
+	frappe.db.set_value(
+		"DocType",
+		"Payment Entry Reference",
+		"modified",
+		frappe.utils.now(),
+		update_modified=False,
+	)
+	frappe.clear_cache(doctype="Payment Entry Reference")
 
 
 def ensure_opening_invoice_extension():
@@ -329,7 +366,7 @@ def get_custom_fields():
 				"no_copy": 1,
 				"in_list_view": 1,
 				"columns": 2,
-				"description": "Total of the reference in its own currency. Grand Total stays in the party account currency.",
+				"description": "Invoice total in the invoice currency.",
 			},
 			{
 				"fieldname": "hero_allocated_invoice_amount",
@@ -339,7 +376,7 @@ def get_custom_fields():
 				"insert_after": "hero_invoice_amount",
 				"in_list_view": 1,
 				"columns": 2,
-				"description": "Amount of this invoice to pay, in the invoice currency. Changing this converts Allocated Amount. Outstanding is in this currency.",
+				"description": "Amount of this invoice in the invoice currency. Changing this updates Allocated (Paying Currency).",
 			},
 			{
 				"fieldname": "hero_account",
@@ -347,9 +384,11 @@ def get_custom_fields():
 				"fieldtype": "Link",
 				"options": "Account",
 				"insert_after": "hero_allocated_invoice_amount",
-				"in_list_view": 1,
-				"columns": 2,
-				"description": "Receivable or payable account for this invoice. It can differ from the party account on the payment.",
+				"read_only": 1,
+				"hidden": 1,
+				"in_list_view": 0,
+				"no_copy": 1,
+				"description": "Taken from the invoice.",
 			},
 			{
 				"fieldname": "hero_account_currency",
@@ -358,6 +397,8 @@ def get_custom_fields():
 				"options": "Currency",
 				"insert_after": "hero_account",
 				"read_only": 1,
+				"hidden": 1,
+				"in_list_view": 0,
 				"no_copy": 1,
 			},
 			{
@@ -367,10 +408,10 @@ def get_custom_fields():
 				"options": "hero_account_currency",
 				"insert_after": "hero_account_currency",
 				"read_only": 1,
+				"hidden": 1,
 				"no_copy": 1,
-				"in_list_view": 1,
-				"columns": 2,
-				"description": "Account-currency amount. Read-only. It converts from Allocated Amount or Allocated (Invoice Currency).",
+				"in_list_view": 0,
+				"description": "Amount in the invoice account currency. Recorded for the ledger and the exchange gain or loss.",
 			},
 			{
 				"fieldname": "hero_booked_rate",
@@ -379,6 +420,8 @@ def get_custom_fields():
 				"precision": "9",
 				"insert_after": "hero_allocated_account_amount",
 				"read_only": 1,
+				"hidden": 1,
+				"in_list_view": 0,
 				"no_copy": 1,
 				"description": "Invoice conversion rate. Company currency for one unit of the invoice currency. This calculates the account-currency allocation.",
 			},
@@ -388,9 +431,9 @@ def get_custom_fields():
 				"fieldtype": "Float",
 				"precision": "9",
 				"insert_after": "hero_booked_rate",
-				"in_list_view": 1,
-				"columns": 1,
-				"description": "Company currency for one unit of the invoice currency on the posting date. This turns the invoice allocation into the bank amount.",
+				"hidden": 1,
+				"in_list_view": 0,
+				"description": "Company currency for one unit of the invoice currency on the posting date.",
 			},
 			{
 				"fieldname": "hero_payment_currency",
@@ -404,21 +447,21 @@ def get_custom_fields():
 			},
 			{
 				"fieldname": "hero_bank_amount",
-				"label": "Bank Amount",
+				"label": "Allocated (Paying Currency)",
 				"fieldtype": "Currency",
 				"options": "hero_payment_currency",
 				"insert_after": "hero_payment_currency",
-				"read_only": 1,
-				"no_copy": 1,
+				"read_only": 0,
+				"hidden": 0,
 				"in_list_view": 1,
 				"columns": 2,
-				"description": "Share of the bank amount for this invoice.",
+				"description": "Amount of this invoice in the bank currency. Changing this updates Allocated (Invoice Currency).",
 			},
 			{
 				"fieldname": "hero_allocation_basis",
 				"label": "Allocation Basis",
 				"fieldtype": "Select",
-				"options": "Invoice\nAccount",
+				"options": "Invoice\nPayment\nAccount",
 				"insert_after": "hero_bank_amount",
 				"hidden": 1,
 				"default": "Invoice",

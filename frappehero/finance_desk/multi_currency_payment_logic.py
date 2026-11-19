@@ -176,7 +176,21 @@ def _allocation_row(source, party_type, payment_currency, company_currency, paym
 	else:
 		invoice_booked_rate = _rate(source.get("booked_rate"), f"the booked rate on {reference_name}")
 		invoice_payment_rate = _rate(source.get("payment_rate"), f"the payment rate on {reference_name}")
-	invoice_amount, account_amount, account_rate = _resolve_amounts(
+	typed_payment = None
+	if _uses_payment_basis(source):
+		typed_payment = _amount(source.get("payment_amount"), precision)
+		if typed_payment < 0:
+			raise MultiCurrencyPaymentError(
+				f"Allocated amount for {reference_doctype} {reference_name} cannot be negative."
+			)
+		if invoice_currency == payment_currency:
+			derived_invoice = typed_payment
+		else:
+			derived_invoice = _quantize(typed_payment * payment_rate / invoice_payment_rate, precision)
+		source = dict(source)
+		source["allocation_basis"] = "Invoice"
+		source["allocated_invoice_amount"] = derived_invoice
+	invoice_amount, account_amount, account_rate, party_amount = _resolve_amounts(
 		source,
 		invoice_currency,
 		account_currency,
@@ -200,11 +214,15 @@ def _allocation_row(source, party_type, payment_currency, company_currency, paym
 			f"outstanding {_show(outstanding)}."
 		)
 	booked_base = _quantize(account_amount * account_rate, precision)
-	payment_base = _quantize(invoice_amount * invoice_payment_rate, precision)
-	if invoice_currency == payment_currency:
-		bank_amount = invoice_amount
+	if typed_payment is not None:
+		bank_amount = typed_payment
+		payment_base = _quantize(typed_payment * payment_rate, precision)
 	else:
-		bank_amount = _quantize(payment_base / payment_rate, precision)
+		payment_base = _quantize(invoice_amount * invoice_payment_rate, precision)
+		if invoice_currency == payment_currency:
+			bank_amount = invoice_amount
+		else:
+			bank_amount = _quantize(payment_base / payment_rate, precision)
 	return {
 		"account": account,
 		"account_currency": account_currency,
@@ -214,6 +232,7 @@ def _allocation_row(source, party_type, payment_currency, company_currency, paym
 		"outstanding_amount": outstanding,
 		"allocated_invoice_amount": invoice_amount,
 		"allocated_amount": account_amount,
+		"party_amount": party_amount,
 		"booked_rate": account_rate,
 		"invoice_booked_rate": invoice_booked_rate,
 		"payment_rate": invoice_payment_rate,
@@ -245,6 +264,11 @@ def _uses_account_basis(source) -> bool:
 	return clean_text(source.get("allocation_basis")).lower() == "account"
 
 
+def _uses_payment_basis(source) -> bool:
+	"""The user typed the bank amount. The invoice amount is converted from it."""
+	return clean_text(source.get("allocation_basis")).lower() == "payment"
+
+
 def _resolve_amounts(
 	source,
 	invoice_currency,
@@ -254,7 +278,12 @@ def _resolve_amounts(
 	reference_name,
 	precision,
 ):
-	"""Convert whichever amount the user typed into the other currency."""
+	"""Convert whichever amount the user typed into the other currency.
+
+	``allocated_amount`` is the party-account amount shown on Allocated when
+	``party_currency`` differs from the row account. Otherwise it is the
+	account-currency amount.
+	"""
 	account_rate = _account_rate(
 		invoice_currency,
 		account_currency,
@@ -262,7 +291,39 @@ def _resolve_amounts(
 		invoice_booked_rate,
 		source.get("account_exchange_rate"),
 		reference_name,
+		"the account",
 	)
+	party_currency = clean_text(source.get("party_currency")) or account_currency
+	separate_party = party_currency != account_currency
+	if _uses_account_basis(source) and separate_party:
+		party_amount = _entered_account_amount(source, precision)
+		party_rate = _account_rate(
+			invoice_currency,
+			party_currency,
+			company_currency,
+			invoice_booked_rate,
+			source.get("party_exchange_rate"),
+			reference_name,
+			"the party account",
+		)
+		invoice_amount = _invoice_from_account(
+			party_amount,
+			invoice_currency,
+			party_currency,
+			invoice_booked_rate,
+			party_rate,
+			precision,
+		)
+		account_amount = _account_from_invoice(
+			invoice_amount,
+			invoice_currency,
+			account_currency,
+			invoice_booked_rate,
+			account_rate,
+			reference_name,
+			precision,
+		)
+		return invoice_amount, account_amount, account_rate, party_amount
 	if _uses_account_basis(source):
 		account_amount = _entered_account_amount(source, precision)
 		invoice_amount = _invoice_from_account(
@@ -273,7 +334,7 @@ def _resolve_amounts(
 			account_rate,
 			precision,
 		)
-		return invoice_amount, account_amount, account_rate
+		return invoice_amount, account_amount, account_rate, account_amount
 	invoice_amount = _invoice_allocation(source, precision)
 	account_amount = _account_from_invoice(
 		invoice_amount,
@@ -284,7 +345,27 @@ def _resolve_amounts(
 		reference_name,
 		precision,
 	)
-	return invoice_amount, account_amount, account_rate
+	if not separate_party:
+		return invoice_amount, account_amount, account_rate, account_amount
+	party_rate = _account_rate(
+		invoice_currency,
+		party_currency,
+		company_currency,
+		invoice_booked_rate,
+		source.get("party_exchange_rate"),
+		reference_name,
+		"the party account",
+	)
+	party_amount = _account_from_invoice(
+		invoice_amount,
+		invoice_currency,
+		party_currency,
+		invoice_booked_rate,
+		party_rate,
+		reference_name,
+		precision,
+	)
+	return invoice_amount, account_amount, account_rate, party_amount
 
 
 def _account_rate(
@@ -294,12 +375,13 @@ def _account_rate(
 	invoice_booked_rate,
 	account_exchange_rate,
 	reference_name,
+	label,
 ):
 	if account_currency == invoice_currency:
 		return invoice_booked_rate
 	if account_currency == company_currency:
 		return Decimal(1)
-	return _rate(account_exchange_rate, f"the account on {reference_name}")
+	return _rate(account_exchange_rate, f"{label} on {reference_name}")
 
 
 def _account_from_invoice(
@@ -472,6 +554,7 @@ def _public_row(row):
 		"outstanding_amount": _show(row["outstanding_amount"]),
 		"allocated_invoice_amount": _show(row["allocated_invoice_amount"]),
 		"allocated_amount": _show(row["allocated_amount"]),
+		"party_amount": _show(row["party_amount"]),
 		"booked_rate": _show(row["booked_rate"]),
 		"invoice_booked_rate": _show(row["invoice_booked_rate"]),
 		"payment_rate": _show(row["payment_rate"]),

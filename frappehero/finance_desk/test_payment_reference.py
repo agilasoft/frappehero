@@ -24,7 +24,7 @@ class TestInvoiceCurrencyColumns(unittest.TestCase):
 		)
 		self.assertEqual(
 			columns,
-			[{"hero_invoice_currency": "USD", "hero_invoice_amount": 100.25}],
+			[{"hero_invoice_currency": "USD", "hero_invoice_amount": 100.25, "conversion_rate": 0.0}],
 		)
 
 	def test_zero_rounded_total_uses_the_grand_total(self):
@@ -66,9 +66,9 @@ class TestInvoiceCurrencyColumns(unittest.TestCase):
 		self.assertEqual(
 			columns,
 			[
-				{"hero_invoice_currency": "", "hero_invoice_amount": 0.0},
-				{"hero_invoice_currency": "", "hero_invoice_amount": 0.0},
-				{"hero_invoice_currency": "", "hero_invoice_amount": 0.0},
+				{"hero_invoice_currency": "", "hero_invoice_amount": 0.0, "conversion_rate": 0.0},
+				{"hero_invoice_currency": "", "hero_invoice_amount": 0.0, "conversion_rate": 0.0},
+				{"hero_invoice_currency": "", "hero_invoice_amount": 0.0, "conversion_rate": 0.0},
 			],
 		)
 
@@ -82,7 +82,7 @@ class TestInvoiceCurrencyColumns(unittest.TestCase):
 		)
 		self.assertEqual(
 			columns,
-			[{"hero_invoice_currency": "PHP", "hero_invoice_amount": 0.0}],
+			[{"hero_invoice_currency": "PHP", "hero_invoice_amount": 0.0, "conversion_rate": 0.0}],
 		)
 
 	def test_journal_party_lines_sum_in_one_currency(self):

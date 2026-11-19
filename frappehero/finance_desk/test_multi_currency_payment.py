@@ -330,6 +330,51 @@ class TestMultiCurrencyPayment(unittest.TestCase):
 		self.assertEqual(allocation["payment_amount"], 184.73)
 		self.assertEqual(_balanced(result["accounts"])[0], _balanced(result["accounts"])[1])
 
+	def test_paying_amount_converts_into_the_invoice_currency(self):
+		row = _invoice(
+			"PINV-EUR", "EUR", "Creditors PHP", 0, outstanding=200, booked_rate=58, payment_rate=60
+		)
+		row["account_currency"] = "PHP"
+		row["allocation_basis"] = "Payment"
+		row["payment_amount"] = 214.29
+		row["allocated_invoice_amount"] = 0
+		result = prepare_payment(_payment(), [row])
+		allocation = result["allocations"][0]
+		self.assertEqual(allocation["payment_amount"], 214.29)
+		self.assertEqual(allocation["allocated_invoice_amount"], 200)
+		self.assertEqual(allocation["allocated_amount"], 11600)
+		self.assertEqual(result["exchange_gain_loss"], -400.24)
+		self.assertEqual(_balanced(result["accounts"])[0], _balanced(result["accounts"])[1])
+
+	def test_party_amount_converts_into_the_invoice_currency(self):
+		row = _invoice(
+			"PINV-USD", "USD", "Creditors USD", 33000, outstanding=559, booked_rate=66, payment_rate=66
+		)
+		row["account_currency"] = "USD"
+		row["party_currency"] = "PHP"
+		row["party_exchange_rate"] = 1
+		row["allocation_basis"] = "Account"
+		row["allocated_invoice_amount"] = 1
+		result = prepare_payment(_payment(paid_amount=500), [row])
+		allocation = result["allocations"][0]
+		self.assertEqual(allocation["party_amount"], 33000)
+		self.assertEqual(allocation["allocated_invoice_amount"], 500)
+		self.assertEqual(allocation["allocated_amount"], 500)
+
+	def test_invoice_amount_converts_into_the_party_currency(self):
+		row = _invoice(
+			"PINV-USD", "USD", "Creditors USD", 1, outstanding=559, booked_rate=66, payment_rate=66
+		)
+		row["account_currency"] = "USD"
+		row["party_currency"] = "PHP"
+		row["party_exchange_rate"] = 1
+		row["allocated_invoice_amount"] = 500
+		result = prepare_payment(_payment(paid_amount=500), [row])
+		allocation = result["allocations"][0]
+		self.assertEqual(allocation["allocated_invoice_amount"], 500)
+		self.assertEqual(allocation["party_amount"], 33000)
+		self.assertEqual(allocation["allocated_amount"], 500)
+
 	def test_allocated_amount_converts_through_a_third_currency(self):
 		row = _invoice(
 			"PINV-EUR", "EUR", "Creditors USD", 200, outstanding=200, booked_rate=58, payment_rate=60
@@ -476,15 +521,21 @@ class TestMultiCurrencyPayment(unittest.TestCase):
 		self.assertNotIn("make_exchange_gain_loss_journal(", controller)
 		self.assertIn("Get Outstanding Invoices", script)
 		self.assertIn("outstanding_invoices", script)
-		self.assertIn('hero_allocation_basis = "Account"', script)
+		self.assertIn('hero_allocation_basis = "Payment"', script)
 		self.assertIn('hero_allocation_basis = "Invoice"', script)
-		self.assertIn("reference_fill_amount", script)
+		self.assertIn("function convert_allocation", script)
+		self.assertIn("function write_allocation", script)
 		self.assertIn("_hero_ref_fill", script)
 		self.assertNotIn("update_docfield_property", script)
 		account_field = install.split('"hero_allocated_account_amount"', 1)[1].split('"hero_booked_rate"', 1)[
 			0
 		]
 		self.assertIn('"read_only": 1', account_field)
+		self.assertIn('"hidden": 1', account_field)
+		self.assertIn("Allocated (Paying Currency)", install)
+		self.assertIn("ensure_payment_reference_fields", install)
+		self.assertIn('"Payment Entry Reference"', install)
+		self.assertIn('"account"', install)
 		self.assertFalse((PACKAGE / "doctype" / "hero_multi_currency_payment").exists())
 		self.assertFalse((PACKAGE / "doctype" / "hero_multi_currency_allocation").exists())
 
