@@ -4,6 +4,8 @@
 frappe.ui.form.on("Payment Entry", {
 	refresh(frm) {
 		set_queries(frm);
+		ensure_company_currency(frm);
+		stamp_payment_currency(frm);
 		if (frm.doc.docstatus === 0 && frm.doc.payment_type !== "Internal Transfer") {
 			frm.add_custom_button(__("Get Outstanding Invoices"), () => get_outstanding(frm));
 		}
@@ -59,6 +61,21 @@ frappe.ui.form.on("Payment Entry Reference", {
 		queue_preview(frm);
 	},
 
+	account(frm, cdt, cdn) {
+		if (frm._hero_multi_lock) {
+			return;
+		}
+		const row = locals[cdt][cdn];
+		if (!row || !row.account || row.account === row.hero_account) {
+			return;
+		}
+		frm._hero_multi_lock = true;
+		frappe.model.set_value(cdt, cdn, "hero_account", row.account).finally(() => {
+			frm._hero_multi_lock = false;
+			queue_preview(frm);
+		});
+	},
+
 	reference_doctype(frm) {
 		queue_preview(frm);
 	},
@@ -77,6 +94,7 @@ frappe.ui.form.on("Payment Entry Reference", {
 				delete row._hero_ref_fill;
 			}
 		}
+		stamp_payment_currency(frm);
 		queue_preview(frm);
 	},
 
@@ -85,11 +103,8 @@ frappe.ui.form.on("Payment Entry Reference", {
 			return;
 		}
 		const row = locals[cdt][cdn];
-		if (row && row._hero_ref_fill && reference_fill_amount(frm, row)) {
-			row.hero_allocation_basis = "Invoice";
+		if (row && row._hero_ref_fill) {
 			delete row._hero_ref_fill;
-		} else if (row && !row._hero_ref_fill) {
-			row.hero_allocation_basis = "Account";
 		}
 		queue_preview(frm);
 	},
@@ -98,10 +113,27 @@ frappe.ui.form.on("Payment Entry Reference", {
 		if (frm._hero_multi_lock) {
 			return;
 		}
+		ensure_company_currency(frm);
 		const row = locals[cdt][cdn];
 		if (row) {
 			row.hero_allocation_basis = "Invoice";
+			delete row._hero_ref_fill;
 		}
+		convert_allocation(frm, cdt, cdn);
+		queue_preview(frm);
+	},
+
+	hero_bank_amount(frm, cdt, cdn) {
+		if (frm._hero_multi_lock) {
+			return;
+		}
+		ensure_company_currency(frm);
+		const row = locals[cdt][cdn];
+		if (row) {
+			row.hero_allocation_basis = "Payment";
+			delete row._hero_ref_fill;
+		}
+		convert_allocation(frm, cdt, cdn);
 		queue_preview(frm);
 	},
 
@@ -187,14 +219,6 @@ function get_outstanding(frm) {
 	load();
 }
 
-function reference_fill_amount(frm, row) {
-	const outstanding = Number(row.outstanding_amount) || 0;
-	const allocated = Number(row.allocated_amount) || 0;
-	const unallocated = Number(frm.doc.unallocated_amount) || 0;
-	const expected = unallocated > outstanding ? outstanding : unallocated;
-	return Math.abs(allocated - expected) < 0.000001 || Math.abs(allocated - outstanding) < 0.000001;
-}
-
 function queue_preview(frm) {
 	if (frm._hero_multi_lock || frm.doc.docstatus || !needs_custom(frm)) {
 		return;
@@ -234,10 +258,11 @@ function preview(frm) {
 			}
 			frm._hero_multi_lock = true;
 			apply_header(frm, message);
-			apply_rows(frm, message.references);
-			frm.refresh_fields();
-			frm._hero_multi_signature = input_signature(frm);
-			frm._hero_multi_lock = false;
+			Promise.resolve(apply_rows(frm, message.references)).finally(() => {
+				frm.refresh_fields();
+				frm._hero_multi_signature = input_signature(frm);
+				frm._hero_multi_lock = false;
+			});
 		})
 		.catch(() => {
 			if (frm._hero_multi_token === token) {
@@ -250,13 +275,17 @@ function needs_custom(frm) {
 	if (spans_accounts(frm)) {
 		return true;
 	}
-	return (frm.doc.references || []).some(
-		(row) =>
-			row.hero_invoice_currency &&
-			row.hero_account_currency &&
-			row.hero_invoice_currency !== row.hero_account_currency &&
+	const party = party_currency(frm);
+	return (frm.doc.references || []).some((row) => {
+		const invoice = row.hero_invoice_currency;
+		const account = row.hero_account_currency || party;
+		return (
+			invoice &&
+			account &&
+			invoice !== account &&
 			(row.reference_name || row.hero_allocated_invoice_amount || row.allocated_amount)
-	);
+		);
+	});
 }
 
 function spans_accounts(frm) {
@@ -281,6 +310,209 @@ function bank_account(frm) {
 		return frm.doc.paid_from || "";
 	}
 	return "";
+}
+
+function party_currency(frm) {
+	if (frm.doc.payment_type === "Receive") {
+		return frm.doc.paid_from_account_currency || "";
+	}
+	if (frm.doc.payment_type === "Pay") {
+		return frm.doc.paid_to_account_currency || "";
+	}
+	return "";
+}
+
+function party_exchange_rate(frm) {
+	const currency = party_currency(frm);
+	if (frm._hero_company_currency && currency === frm._hero_company_currency) {
+		return 1;
+	}
+	const rate =
+		frm.doc.payment_type === "Receive" ? frm.doc.source_exchange_rate : frm.doc.target_exchange_rate;
+	const number = Number(rate);
+	return number > 0 ? number : 0;
+}
+
+function ensure_company_currency(frm) {
+	if (frm._hero_company_currency || frm._hero_company_currency_loading || !frm.doc.company || !frappe.db) {
+		return;
+	}
+	frm._hero_company_currency_loading = true;
+	frappe.db.get_value("Company", frm.doc.company, "default_currency").then((response) => {
+		frm._hero_company_currency_loading = false;
+		const message = response && response.message;
+		frm._hero_company_currency = (message && message.default_currency) || "";
+		convert_open_rows(frm);
+	});
+}
+
+function money(value) {
+	const number = Number(value);
+	if (!isFinite(number)) {
+		return 0;
+	}
+	return flt(number, 2);
+}
+
+function paying_currency(frm) {
+	if (frm.doc.payment_type === "Receive") {
+		return frm.doc.paid_to_account_currency || "";
+	}
+	if (frm.doc.payment_type === "Pay") {
+		return frm.doc.paid_from_account_currency || "";
+	}
+	return "";
+}
+
+function stamp_payment_currency(frm) {
+	const currency = paying_currency(frm);
+	if (!currency) {
+		return;
+	}
+	(frm.doc.references || []).forEach((row) => {
+		row.hero_payment_currency = currency;
+	});
+}
+
+function invoice_rate(row) {
+	const payment = Number(row.hero_payment_rate);
+	if (payment > 0) {
+		return payment;
+	}
+	const booked = Number(row.hero_booked_rate);
+	return booked > 0 ? booked : 0;
+}
+
+function paying_rate(frm) {
+	const currency = paying_currency(frm);
+	if (frm._hero_company_currency && currency === frm._hero_company_currency) {
+		return 1;
+	}
+	const rate = Number(bank_rate(frm));
+	return rate > 0 ? rate : 0;
+}
+
+function convert_allocation(frm, cdt, cdn) {
+	const row = locals[cdt] && locals[cdt][cdn];
+	if (!row || frm._hero_multi_lock) {
+		return;
+	}
+	stamp_payment_currency(frm);
+	const invoiceCurrency = row.hero_invoice_currency || "";
+	const payingCurrency = paying_currency(frm);
+	if (!invoiceCurrency || !payingCurrency) {
+		return;
+	}
+	const basis = row.hero_allocation_basis === "Payment" ? "Payment" : "Invoice";
+	let invoiceAmount;
+	let payingAmount;
+	if (invoiceCurrency === payingCurrency) {
+		const source = basis === "Payment" ? row.hero_bank_amount : row.hero_allocated_invoice_amount;
+		invoiceAmount = money(source);
+		payingAmount = invoiceAmount;
+	} else {
+		const rate = invoice_rate(row);
+		const bankRate = paying_rate(frm);
+		if (!(rate > 0) || !(bankRate > 0)) {
+			return;
+		}
+		if (basis === "Payment") {
+			payingAmount = money(row.hero_bank_amount);
+			invoiceAmount = money((payingAmount * bankRate) / rate);
+		} else {
+			invoiceAmount = money(row.hero_allocated_invoice_amount);
+			payingAmount = money((invoiceAmount * rate) / bankRate);
+		}
+	}
+	write_allocation(
+		frm,
+		cdt,
+		cdn,
+		invoiceAmount,
+		payingAmount,
+		party_amount(frm, row, invoiceAmount, payingAmount),
+		account_amount(frm, row, invoiceAmount, payingAmount)
+	);
+}
+
+function party_amount(frm, row, invoiceAmount, payingAmount) {
+	const party = party_currency(frm);
+	const paying = paying_currency(frm);
+	const invoice = row.hero_invoice_currency || "";
+	if (!party) {
+		return null;
+	}
+	if (party === paying) {
+		return payingAmount;
+	}
+	if (party === invoice) {
+		return invoiceAmount;
+	}
+	const booked = Number(row.hero_booked_rate) || 0;
+	const partyRate = party_exchange_rate(frm);
+	if (!(booked > 0)) {
+		return null;
+	}
+	if (frm._hero_company_currency && party === frm._hero_company_currency) {
+		return money(invoiceAmount * booked);
+	}
+	if (!(partyRate > 0)) {
+		return null;
+	}
+	return money((invoiceAmount * booked) / partyRate);
+}
+
+function account_amount(frm, row, invoiceAmount, payingAmount) {
+	const accountCurrency = row.hero_account_currency || "";
+	const invoiceCurrency = row.hero_invoice_currency || "";
+	const paying = paying_currency(frm);
+	if (!accountCurrency) {
+		return null;
+	}
+	if (accountCurrency === invoiceCurrency) {
+		return invoiceAmount;
+	}
+	if (accountCurrency === paying) {
+		return payingAmount;
+	}
+	const booked = Number(row.hero_booked_rate) || 0;
+	if (booked > 0 && frm._hero_company_currency && accountCurrency === frm._hero_company_currency) {
+		return money(invoiceAmount * booked);
+	}
+	return null;
+}
+
+function write_allocation(frm, cdt, cdn, invoiceAmount, payingAmount, partyAmount, accountAmount) {
+	const row = locals[cdt][cdn];
+	frm._hero_multi_lock = true;
+	const writes = [];
+	if (Number(row.hero_allocated_invoice_amount) !== Number(invoiceAmount)) {
+		writes.push(frappe.model.set_value(cdt, cdn, "hero_allocated_invoice_amount", invoiceAmount));
+	}
+	if (Number(row.hero_bank_amount) !== Number(payingAmount)) {
+		writes.push(frappe.model.set_value(cdt, cdn, "hero_bank_amount", payingAmount));
+	}
+	if (partyAmount !== null && Number(row.allocated_amount) !== Number(partyAmount)) {
+		writes.push(frappe.model.set_value(cdt, cdn, "allocated_amount", partyAmount));
+	}
+	if (accountAmount !== null && Number(row.hero_allocated_account_amount) !== Number(accountAmount)) {
+		writes.push(frappe.model.set_value(cdt, cdn, "hero_allocated_account_amount", accountAmount));
+	}
+	Promise.all(writes).finally(() => {
+		frm._hero_multi_lock = false;
+	});
+}
+
+function convert_open_rows(frm) {
+	(frm.doc.references || []).forEach((row) => {
+		if (!row.doctype || !row.name) {
+			return;
+		}
+		if (!row.hero_allocation_basis) {
+			row.hero_allocation_basis = Number(row.hero_allocated_invoice_amount) ? "Invoice" : "Account";
+		}
+		convert_allocation(frm, row.doctype, row.name);
+	});
 }
 
 function party_account(frm) {
@@ -325,6 +557,7 @@ function input_signature(frm) {
 			row.reference_name || "",
 			row.hero_allocation_basis || "",
 			row.hero_allocated_invoice_amount || 0,
+			row.hero_bank_amount || 0,
 			row.allocated_amount || 0,
 			row.hero_payment_rate || 0,
 		]),
@@ -361,11 +594,23 @@ function apply_rows(frm, rows) {
 	rows.forEach((row) => {
 		by_name[(row.reference_doctype || "") + "::" + (row.reference_name || "")] = row;
 	});
+	const writes = [];
 	(frm.doc.references || []).forEach((row) => {
 		const found = by_name[(row.reference_doctype || "") + "::" + (row.reference_name || "")];
 		if (!found) {
 			return;
 		}
 		Object.assign(row, found);
+		if (!row.doctype || !row.name) {
+			return;
+		}
+		["hero_allocated_invoice_amount", "hero_bank_amount", "allocated_amount", "hero_allocated_account_amount"].forEach(
+			(field) => {
+				if (found[field] !== undefined) {
+					writes.push(frappe.model.set_value(row.doctype, row.name, field, found[field]));
+				}
+			}
+		);
 	});
+	return Promise.all(writes);
 }

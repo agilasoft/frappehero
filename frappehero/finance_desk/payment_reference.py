@@ -40,6 +40,9 @@ def set_invoice_currency(doc, method=None):
 	for reference, column in zip(references, columns, strict=True):
 		reference.hero_invoice_currency = column["hero_invoice_currency"]
 		reference.hero_invoice_amount = column["hero_invoice_amount"]
+		rate = column.get("conversion_rate")
+		if rate and not _positive(reference.get("hero_booked_rate")) and _ready_rate():
+			reference.hero_booked_rate = rate
 
 
 @frappe.whitelist()
@@ -104,6 +107,8 @@ def _document_sources(doctype, names):
 		fields.append("rounded_total")
 	if meta.has_field("grand_total"):
 		fields.append("grand_total")
+	if meta.has_field("conversion_rate"):
+		fields.append("conversion_rate")
 	found = {}
 	for row in _fetch(doctype, names, fields):
 		found[row.name] = source_from_document(row)
@@ -162,3 +167,19 @@ def _ready():
 		return False
 	meta = frappe.get_meta("Payment Entry Reference")
 	return meta.has_field("hero_invoice_currency") and meta.has_field("hero_invoice_amount")
+
+
+def _ready_rate():
+	if not frappe.db.exists("DocType", "Payment Entry Reference"):
+		return False
+	return frappe.get_meta("Payment Entry Reference").has_field("hero_booked_rate")
+
+
+def _positive(value):
+	if value is None or value is False or value == "":
+		return None
+	try:
+		number = float(value)
+	except (TypeError, ValueError):
+		return None
+	return number if number > 0 else None

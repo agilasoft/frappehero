@@ -115,7 +115,15 @@ function apply_invoice_currency(frm, columns) {
 			row.hero_invoice_amount = amount;
 			changed = true;
 		}
+		const rate = Number(column.conversion_rate) || 0;
+		if (rate && !Number(row.hero_booked_rate)) {
+			row.hero_booked_rate = rate;
+			changed = true;
+		}
 	});
+	if (typeof convert_open_rows === "function") {
+		convert_open_rows(frm);
+	}
 	if (!changed || !frm.fields_dict.references) {
 		return;
 	}

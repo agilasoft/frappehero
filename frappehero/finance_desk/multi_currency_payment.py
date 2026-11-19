@@ -38,6 +38,9 @@ def apply_to_payment(doc, method=None):
 	_fill_account_currencies(doc)
 	if not _needs_custom_allocation(doc):
 		doc.hero_multi_account = 0
+		_mirror_user_allocation(doc)
+		return
+	if doc.flags.get("hero_preview") and not _has_user_allocation(doc):
 		return
 	prepare_payment_entry(doc)
 
@@ -127,7 +130,7 @@ def outstanding_invoices(
 	for invoice in invoices:
 		account = party_ledger(invoice.get(account_field), company, party_type)
 		booked_rate, row_rate = _invoice_rates(
-			account.account_currency,
+			invoice.currency,
 			defaults.default_currency,
 			invoice.conversion_rate,
 			None,
@@ -179,6 +182,7 @@ def preview(payment=None):
 			row.setdefault("parentfield", "references")
 			row.setdefault("parenttype", "Payment Entry")
 	doc = frappe.get_doc(parsed)
+	doc.flags.hero_preview = True
 	apply_to_payment(doc)
 	return _summary(doc)
 
@@ -414,13 +418,15 @@ def _write(doc, prepared):
 			continue
 		row.hero_account = computed["account"]
 		row.hero_account_currency = computed["account_currency"]
+		if getattr(getattr(row, "meta", None), "has_field", None) and row.meta.has_field("account"):
+			row.account = computed["account"]
 		row.reference_doctype = computed["reference_doctype"]
 		row.reference_name = computed["reference_name"]
 		row.hero_invoice_currency = computed["invoice_currency"]
 		row.outstanding_amount = computed["outstanding_amount"]
 		row.hero_allocated_invoice_amount = computed["allocated_invoice_amount"]
 		row.hero_allocated_account_amount = computed["allocated_amount"]
-		row.allocated_amount = computed["allocated_amount"]
+		row.allocated_amount = computed.get("party_amount", computed["allocated_amount"])
 		row.hero_booked_rate = computed["invoice_booked_rate"]
 		row.hero_payment_rate = computed["payment_rate"]
 		row.hero_payment_currency = prepared["bank_currency"]
@@ -469,12 +475,70 @@ def _summary(doc):
 	}
 
 
+def _bank_currency(doc):
+	if doc.get("payment_type") == "Receive":
+		return clean_text(doc.get("paid_to_account_currency"))
+	if doc.get("payment_type") == "Pay":
+		return clean_text(doc.get("paid_from_account_currency"))
+	return ""
+
+
+def _has_user_allocation(doc):
+	for row in doc.get("references") or []:
+		basis = (clean_text(row.get("hero_allocation_basis")) or "Invoice").lower()
+		if basis == "payment" and _positive(row.get("hero_bank_amount")):
+			return True
+		if basis == "account" and _positive(row.get("allocated_amount")):
+			return True
+		if _positive(row.get("hero_allocated_invoice_amount")):
+			return True
+	return False
+
+
+def _mirror_user_allocation(doc):
+	"""Copy the amount the user typed into the party field when the currencies match.
+
+	The ledger still needs Allocated Amount. The user types the paying currency
+	or the invoice currency, and this copies that figure when it is already in
+	the party account currency.
+	"""
+	party = _party_currency(doc)
+	bank = _bank_currency(doc)
+	for row in doc.get("references") or []:
+		basis = (clean_text(row.get("hero_allocation_basis")) or "Invoice").lower()
+		invoice_currency = clean_text(row.get("hero_invoice_currency"))
+		account_currency = clean_text(row.get("hero_account_currency"))
+		if basis == "payment" and party and party == bank and _positive(row.get("hero_bank_amount")):
+			row.allocated_amount = row.hero_bank_amount
+		elif (
+			basis != "account"
+			and party
+			and party == invoice_currency
+			and _positive(row.get("hero_allocated_invoice_amount"))
+		):
+			row.allocated_amount = row.hero_allocated_invoice_amount
+		if (
+			account_currency
+			and account_currency == invoice_currency
+			and _positive(row.get("hero_allocated_invoice_amount"))
+		):
+			row.hero_allocated_account_amount = row.hero_allocated_invoice_amount
+		elif account_currency and account_currency == bank and _positive(row.get("hero_bank_amount")):
+			row.hero_allocated_account_amount = row.hero_bank_amount
+
+
 def _fill_missing_accounts(doc):
 	if doc.get("party_type") not in _INVOICE_FIELDS:
 		return
 	expected = _INVOICE_FIELDS[doc.party_type][0]
 	for row in doc.get("references") or []:
-		if clean_text(row.get("hero_account")) or not clean_text(row.get("reference_name")):
+		if clean_text(row.get("hero_account")):
+			continue
+		standard_account = clean_text(row.get("account"))
+		if standard_account:
+			row.hero_account = standard_account
+			continue
+		if not clean_text(row.get("reference_name")):
 			continue
 		if clean_text(row.get("reference_doctype")) not in ("", expected):
 			continue
@@ -491,6 +555,22 @@ def _fill_account_currencies(doc):
 			continue
 		if frappe.db.exists("Account", account):
 			row.hero_account_currency = frappe.db.get_value("Account", account, "account_currency")
+
+
+def _party_currency(doc):
+	if doc.get("payment_type") == "Receive":
+		return clean_text(doc.get("paid_from_account_currency"))
+	if doc.get("payment_type") == "Pay":
+		return clean_text(doc.get("paid_to_account_currency"))
+	return ""
+
+
+def _party_exchange_rate(doc):
+	if doc.get("payment_type") == "Receive":
+		return doc.get("source_exchange_rate")
+	if doc.get("payment_type") == "Pay":
+		return doc.get("target_exchange_rate")
+	return None
 
 
 def _needs_custom_allocation(doc) -> bool:
@@ -558,32 +638,49 @@ def _source_from_row(doc, row, defaults):
 		row.get("hero_payment_rate"),
 		doc.posting_date,
 	)
-	basis = clean_text(row.get("hero_allocation_basis")) or "Invoice"
+	basis = (clean_text(row.get("hero_allocation_basis")) or "Invoice").lower()
 	invoice_allocated = row.get("hero_allocated_invoice_amount")
-	if basis.lower() != "account" and not _positive(invoice_allocated):
+	paying = row.get("hero_bank_amount")
+	if basis == "payment":
+		if not _positive(paying):
+			return None
+	elif basis == "account":
+		if not _positive(allocated) and not _positive(invoice_allocated):
+			return None
+	elif not _positive(invoice_allocated):
+		if not _positive(allocated):
+			return None
+		basis = "account"
 		invoice_allocated = allocated
 	account_exchange_rate = None
 	if account.account_currency not in (invoice["currency"], defaults.default_currency):
 		account_exchange_rate = exchange_rate(
 			account.account_currency, defaults.default_currency, doc.posting_date
 		)
-	return _keep_saved_allocation(
-		doc,
-		{
-			"account": account.name,
-			"account_currency": account.account_currency,
-			"reference_doctype": expected,
-			"reference_name": invoice["name"],
-			"invoice_currency": invoice["currency"],
-			"outstanding_amount": invoice["outstanding_amount"],
-			"allocation_basis": basis,
-			"allocated_invoice_amount": invoice_allocated,
-			"allocated_amount": allocated,
-			"booked_rate": booked_rate,
-			"payment_rate": row_rate,
-			"account_exchange_rate": account_exchange_rate,
-		},
-	)
+	source = {
+		"account": account.name,
+		"account_currency": account.account_currency,
+		"reference_doctype": expected,
+		"reference_name": invoice["name"],
+		"invoice_currency": invoice["currency"],
+		"outstanding_amount": invoice["outstanding_amount"],
+		"allocation_basis": "Payment"
+		if basis == "payment"
+		else "Account"
+		if basis == "account"
+		else "Invoice",
+		"allocated_invoice_amount": invoice_allocated,
+		"allocated_amount": allocated,
+		"payment_amount": paying,
+		"booked_rate": booked_rate,
+		"payment_rate": row_rate,
+		"account_exchange_rate": account_exchange_rate,
+	}
+	party_currency = _party_currency(doc)
+	if party_currency and party_currency != account.account_currency:
+		source["party_currency"] = party_currency
+		source["party_exchange_rate"] = _party_exchange_rate(doc)
+	return _keep_saved_allocation(doc, source)
 
 
 def _invoice_rates(account_currency, company_currency, conversion_rate, payment_rate, posting_date):
@@ -734,13 +831,14 @@ def _as_payment(payment_type, prepared):
 			{
 				"reference_doctype": row["reference_doctype"],
 				"reference_name": row["reference_name"],
+				"account": row["account"],
 				"hero_account": row["account"],
 				"hero_account_currency": row["account_currency"],
 				"hero_invoice_currency": row["invoice_currency"],
 				"outstanding_amount": row["outstanding_amount"],
 				"hero_allocated_invoice_amount": row["allocated_invoice_amount"],
 				"hero_allocated_account_amount": row["allocated_amount"],
-				"allocated_amount": row["allocated_amount"],
+				"allocated_amount": row.get("party_amount", row["allocated_amount"]),
 				"hero_booked_rate": row["invoice_booked_rate"],
 				"hero_payment_rate": row["payment_rate"],
 				"hero_payment_currency": bank_currency,
