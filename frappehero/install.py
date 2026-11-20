@@ -21,6 +21,7 @@ def after_install():
 def after_migrate():
 	ensure_custom_fields()
 	remove_retired_doctypes()
+	remove_retired_pages()
 
 
 def remove_retired_doctypes():
@@ -28,6 +29,30 @@ def remove_retired_doctypes():
 	for name in ("Hero Multi Currency Payment", "Hero Multi Currency Allocation"):
 		if frappe.db.exists("DocType", name):
 			frappe.delete_doc("DocType", name, force=1, ignore_permissions=True)
+
+
+def remove_retired_pages():
+	"""Point saved desk links at AR/AP Account, then drop the old page."""
+	_retarget_page("party-reclass", "ar-ap-account", "Party Reclass", "AR/AP Account")
+	if frappe.db.exists("Page", "party-reclass"):
+		frappe.delete_doc("Page", "party-reclass", force=1, ignore_permissions=True)
+
+
+def _retarget_page(old_page, new_page, old_label, new_label):
+	for doctype in ("Sidebar Item", "Workspace Link"):
+		if not frappe.db.exists("DocType", doctype):
+			continue
+		meta = frappe.get_meta(doctype)
+		if not meta.has_field("link_to"):
+			continue
+		fields = ["name"]
+		if meta.has_field("label"):
+			fields.append("label")
+		for row in frappe.get_all(doctype, filters={"link_to": old_page}, fields=fields):
+			values = {"link_to": new_page}
+			if meta.has_field("label") and row.label == old_label:
+				values["label"] = new_label
+			frappe.db.set_value(doctype, row.name, values, update_modified=False)
 
 
 def ensure_custom_fields():

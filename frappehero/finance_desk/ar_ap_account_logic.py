@@ -1,12 +1,12 @@
 # Copyright (c) 2026, Agilasoft and contributors
 # For license information, please see license.txt
 
-"""Move submitted invoices from one receivable or payable to another.
+"""Change the receivable or payable GL account on submitted invoices.
 
 Pure functions. The desk page calls these, and the tests run without a site.
-The destination can use another currency. A change is between the invoice
+The new account can use another currency. A change is between the invoice
 currency and the company currency, and the company-currency amount stays as
-submitted. Receipts and journals that post the invoice move with it. Nothing
+submitted. Receipts and journals that post the invoice change with it. Nothing
 here cancels a document.
 """
 
@@ -39,15 +39,15 @@ _SIDES = {
 }
 
 
-class PartyReclassError(ValueError):
-	"""The accounts cannot be used for this reclass."""
+class ArApAccountError(ValueError):
+	"""These GL accounts cannot be used for this change."""
 
 
 def side_choice(value) -> dict:
 	"""Receivable moves sales invoices. Payable moves purchase invoices."""
 	key = clean_text(value).lower()
 	if key not in _SIDES:
-		raise PartyReclassError("Choose Receivable or Payable.")
+		raise ArApAccountError("Choose Receivable or Payable.")
 	return {"name": key, **_SIDES[key]}
 
 
@@ -64,23 +64,23 @@ def check_accounts(company, side, from_account, to_account, accounts) -> dict:
 	if not company:
 		errors.append("Choose a company.")
 	if not from_account:
-		errors.append("Choose the account to leave.")
+		errors.append("Choose the current GL account.")
 	if not to_account:
-		errors.append("Choose the account to use.")
+		errors.append("Choose the new GL account.")
 	if from_account and from_account == to_account:
-		errors.append("The account to leave and the account to use are the same.")
+		errors.append("The current GL account and the new GL account are the same.")
 	currency = _account_error(
-		errors, accounts, from_account, company, chosen["account_type"], "The account to leave"
+		errors, accounts, from_account, company, chosen["account_type"], "The current GL account"
 	)
 	other = _account_error(
-		errors, accounts, to_account, company, chosen["account_type"], "The account to use"
+		errors, accounts, to_account, company, chosen["account_type"], "The new GL account"
 	)
 	if errors:
-		raise PartyReclassError(" ".join(errors))
+		raise ArApAccountError(" ".join(errors))
 	return {"from_currency": currency, "to_currency": other}
 
 
-def plan_reclass(
+def plan_accounts(
 	company,
 	side,
 	from_account,
