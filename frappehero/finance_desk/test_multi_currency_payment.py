@@ -521,8 +521,9 @@ class TestMultiCurrencyPayment(unittest.TestCase):
 		self.assertNotIn("make_exchange_gain_loss_journal(", controller)
 		self.assertIn("Get Outstanding Invoices", script)
 		self.assertIn("outstanding_invoices", script)
-		self.assertIn('hero_allocation_basis = "Payment"', script)
+		self.assertNotIn('hero_allocation_basis = "Payment"', script)
 		self.assertIn('hero_allocation_basis = "Invoice"', script)
+		self.assertIn("hide_calculated_amounts", script)
 		self.assertIn("function convert_allocation", script)
 		self.assertIn("function write_allocation", script)
 		self.assertIn("_hero_ref_fill", script)
@@ -532,7 +533,10 @@ class TestMultiCurrencyPayment(unittest.TestCase):
 		]
 		self.assertIn('"read_only": 1', account_field)
 		self.assertIn('"hidden": 1', account_field)
-		self.assertIn("Allocated (Paying Currency)", install)
+		bank_amount = install.split('"hero_bank_amount"', 1)[1].split('"hero_allocation_basis"', 1)[0]
+		self.assertIn('"hidden": 1', bank_amount)
+		self.assertIn('"read_only": 1', bank_amount)
+		self.assertNotIn("Allocated (Paying Currency)", install)
 		self.assertIn("ensure_payment_reference_fields", install)
 		self.assertIn('"Payment Entry Reference"', install)
 		self.assertIn('"account"', install)
