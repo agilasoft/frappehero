@@ -48,7 +48,7 @@ def trash_payment(doc, method=None):
 def _sync_payment(doc, action):
 	previous = _previous_payment(doc)
 	selected = clean_text(doc.get("hero_cheque_leaf"))
-	bank_account = clean_text(doc.get("bank_account"))
+	bank_account = _cheque_bank_account(doc)
 	leaves = _load_leaves(bank_account, [selected, previous.get("hero_cheque_leaf")])
 	numbers = _numbers_for([leaf["name"] for leaf in leaves])
 	plan = plan_payment_cheque(
@@ -97,7 +97,7 @@ def _apply_plan(doc, plan, action):
 
 
 def _write_updates(updates, doc):
-	party = clean_text(doc.get("party_name") or doc.get("party"))[:140]
+	party = _cheque_party(doc)
 	posting_date = doc.get("posting_date")
 	for leaf_name, changes in (updates or {}).items():
 		if not changes or not frappe.db.exists("Hero Cheque Leaf", leaf_name):
@@ -143,7 +143,7 @@ def _assert_writable(row, change, payment_name):
 
 @frappe.whitelist()
 def suggest_cheque(bank_account=None, company=None, mode_of_payment=None, leaf=None):
-	"""Next free cheque for a Pay entry. The form offers it; saving reserves it."""
+	"""Next free cheque for a Pay or Internal Transfer. The form offers it; saving reserves it."""
 	_payer()
 	bank_account = clean_text(bank_account)
 	leaf = clean_text(leaf)
@@ -224,6 +224,42 @@ def _previous_payment(doc) -> dict:
 		as_dict=True,
 	)
 	return row or blank
+
+
+def _cheque_bank_account(doc) -> str:
+	"""The Bank Account the cheque is drawn on.
+
+	Pay uses Company Bank Account. Internal Transfer uses the Bank Account
+	linked to Account Paid From. That link is filled during Payment Entry
+	validate, which runs after this reservation, so the account is resolved here.
+	"""
+	payment_type = clean_text(doc.get("payment_type"))
+	if payment_type == "Pay":
+		return clean_text(doc.get("bank_account"))
+	if payment_type != "Internal Transfer":
+		return ""
+	account = clean_text(doc.get("paid_from"))
+	if account:
+		return _bank_account_for_gl(account, doc.get("company"))
+	return clean_text(doc.get("paid_from_bank_account"))
+
+
+def _bank_account_for_gl(account, company) -> str:
+	account = clean_text(account)
+	if not account or not frappe.db.table_exists("Bank Account"):
+		return ""
+	filters = {"account": account, "disabled": 0}
+	company = clean_text(company)
+	if company and frappe.get_meta("Bank Account").has_field("company"):
+		filters["company"] = company
+	return clean_text(frappe.db.get_value("Bank Account", filters, "name"))
+
+
+def _cheque_party(doc) -> str:
+	named = clean_text(doc.get("party_name") or doc.get("party"))
+	if not named and clean_text(doc.get("payment_type")) == "Internal Transfer":
+		named = clean_text(doc.get("paid_to"))
+	return named[:140]
 
 
 def _mode_uses_cheque(mode_of_payment) -> bool:

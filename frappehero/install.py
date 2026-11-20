@@ -211,6 +211,7 @@ def ensure_sales_invoice_dispute_tab():
 
 
 def get_custom_fields():
+	cheque_on = "eval:doc.payment_type=='Pay' || doc.payment_type=='Internal Transfer'"
 	return {
 		"User Permission": [
 			{
@@ -279,7 +280,7 @@ def get_custom_fields():
 				"fieldtype": "Check",
 				"insert_after": "type",
 				"default": "0",
-				"description": "Pay entries with this mode take a cheque number from the bank account's Cheque Leaf. A mode named cheque or check does this without the tick.",
+				"description": "Pay and Internal Transfer entries with this mode take a cheque number from the paying bank account's Cheque Leaf. An Internal Transfer uses the Bank Account on Account Paid From. A mode named cheque or check does this without the tick.",
 			},
 		],
 		"Payment Entry": [
@@ -289,7 +290,7 @@ def get_custom_fields():
 				"fieldtype": "Section Break",
 				"insert_after": "reference_date",
 				"collapsible": 1,
-				"depends_on": "eval:doc.payment_type=='Pay'",
+				"depends_on": cheque_on,
 			},
 			{
 				"fieldname": "hero_cheque_leaf",
@@ -297,7 +298,7 @@ def get_custom_fields():
 				"fieldtype": "Link",
 				"options": "Hero Cheque Leaf",
 				"insert_after": "hero_cheque_section",
-				"depends_on": "eval:doc.payment_type=='Pay'",
+				"depends_on": cheque_on,
 				"in_standard_filter": 1,
 				"description": "The set of cheque numbers for this company bank account.",
 			},
@@ -306,7 +307,7 @@ def get_custom_fields():
 				"label": "Cheque Number",
 				"fieldtype": "Data",
 				"insert_after": "hero_cheque_leaf",
-				"depends_on": "eval:doc.payment_type=='Pay'",
+				"depends_on": cheque_on,
 				"no_copy": 1,
 				"in_standard_filter": 1,
 				"description": "A number from the Cheque Leaf. Saved onto Cheque/Reference No.",
@@ -315,7 +316,7 @@ def get_custom_fields():
 				"fieldname": "hero_cheque_column",
 				"fieldtype": "Column Break",
 				"insert_after": "hero_cheque_number",
-				"depends_on": "eval:doc.payment_type=='Pay'",
+				"depends_on": cheque_on,
 			},
 			{
 				"fieldname": "hero_cheque_state",
@@ -324,7 +325,7 @@ def get_custom_fields():
 				"insert_after": "hero_cheque_column",
 				"read_only": 1,
 				"no_copy": 1,
-				"depends_on": "eval:doc.payment_type=='Pay'",
+				"depends_on": cheque_on,
 			},
 			{
 				"fieldname": "hero_multi_account",

@@ -32,7 +32,7 @@ frappehero.ChequeLeaf = class ChequeLeaf {
 		this.page.main.addClass("fh-page");
 		this.page.main.html(`
 			<div class="fh-app">
-				<p class="fh-muted">${__("Each leaf is the set of cheque numbers for one bank account. A Pay entry with a cheque mode takes the next available number.")}</p>
+				<p class="fh-muted">${__("Each leaf is the set of cheque numbers for one bank account. A Pay or Internal Transfer with a cheque mode takes the next available number.")}</p>
 				<div class="fh-filters">
 					<div class="fh-company"></div>
 					<div class="fh-bank"></div>
