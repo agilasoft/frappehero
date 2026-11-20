@@ -4,8 +4,9 @@
 """Move submitted invoices onto another receivable or payable without cancelling them.
 
 The account is written onto the submitted invoice, onto the receipts and
-journals that post it, and then each voucher's ledger is rebuilt. Amounts,
-outstanding balances, and bank amounts stay as they are.
+journals that post it, and then each voucher's ledger is rebuilt. The new
+account can use another currency. The company-currency amount and the bank
+amount stay as submitted.
 """
 
 import frappe
@@ -22,6 +23,7 @@ from frappehero.finance_desk.party_reclass_logic import (
 	selection_matches,
 	side_choice,
 )
+from frappehero.finance_desk.receivable_repair_logic import outstanding_matches
 from frappehero.flags import clean_text, parse_payload
 
 _INVOICE_FIELDS = [
@@ -29,6 +31,7 @@ _INVOICE_FIELDS = [
 	"company",
 	"docstatus",
 	"currency",
+	"conversion_rate",
 	"outstanding_amount",
 	"party_account_currency",
 	"posting_date",
@@ -47,21 +50,28 @@ _PAYMENT_FIELDS = [
 	"paid_to_account_currency",
 	"paid_amount",
 	"received_amount",
+	"base_paid_amount",
+	"base_received_amount",
 	"unallocated_amount",
 	"posting_date",
 ]
 
 
 def preview_reclass(company, side, from_account, to_account) -> dict:
-	company, side_name, from_account, to_account, currency = _checked(company, side, from_account, to_account)
-	plan = _plan(company, side_name, from_account, to_account)
+	company, side_name, from_account, to_account, from_currency, to_currency, company_currency = _checked(
+		company, side, from_account, to_account
+	)
+	plan = _plan(company, side_name, from_account, to_account, from_currency, to_currency, company_currency)
 	blocked = _block_reason(company, plan)
 	needs_multi = any(row["mode"] == MULTI and row["action"] == MOVE for row in plan["payments"])
 	return {
 		"company": company,
 		"side": side_name,
 		"doctype": plan["doctype"],
-		"account_currency": currency,
+		"account_currency": to_currency,
+		"from_currency": from_currency,
+		"to_currency": to_currency,
+		"company_currency": company_currency,
 		"from_account": from_account,
 		"to_account": to_account,
 		"blocked": blocked,
@@ -76,8 +86,10 @@ def preview_reclass(company, side, from_account, to_account) -> dict:
 
 
 def apply_reclass(company, side, from_account, to_account, expected) -> dict:
-	company, side_name, from_account, to_account, currency = _checked(company, side, from_account, to_account)
-	plan = _plan(company, side_name, from_account, to_account)
+	company, side_name, from_account, to_account, from_currency, to_currency, company_currency = _checked(
+		company, side, from_account, to_account
+	)
+	plan = _plan(company, side_name, from_account, to_account, from_currency, to_currency, company_currency)
 	blocked = _block_reason(company, plan)
 	if blocked:
 		frappe.throw(blocked, title=_("Books are closed"))
@@ -94,7 +106,7 @@ def apply_reclass(company, side, from_account, to_account, expected) -> dict:
 		savepoint = f"party_reclass_{index}"
 		frappe.db.savepoint(savepoint)
 		try:
-			_apply_chain(plan, chain, currency)
+			_apply_chain(plan, chain, to_currency)
 			mismatch = _mismatch(plan, chain)
 			if mismatch:
 				_rollback(savepoint)
@@ -116,7 +128,7 @@ def apply_reclass(company, side, from_account, to_account, expected) -> dict:
 	}
 
 
-def _plan(company, side_name, from_account, to_account):
+def _plan(company, side_name, from_account, to_account, from_currency, to_currency, company_currency):
 	chosen = side_choice(side_name)
 	invoices = _load_invoices(company, chosen, from_account)
 	names = [row["name"] for row in invoices]
@@ -132,7 +144,18 @@ def _plan(company, side_name, from_account, to_account):
 	if extra:
 		invoices.extend(_load_named_invoices(chosen, extra))
 	journals = _load_journals(company, chosen["doctype"], [row["name"] for row in invoices])
-	return plan_reclass(company, side_name, from_account, to_account, invoices, payments, journals)
+	return plan_reclass(
+		company,
+		side_name,
+		from_account,
+		to_account,
+		invoices,
+		payments,
+		journals,
+		company_currency=company_currency,
+		from_currency=from_currency,
+		to_currency=to_currency,
+	)
 
 
 def _checked(company, side, from_account, to_account):
@@ -147,10 +170,13 @@ def _checked(company, side, from_account, to_account):
 		frappe.throw(_("Choose a company."))
 	accounts = _account_map([from_account, to_account])
 	try:
-		currency = check_accounts(company, chosen["name"], from_account, to_account, accounts)
+		currencies = check_accounts(company, chosen["name"], from_account, to_account, accounts)
 	except PartyReclassError as exc:
 		frappe.throw(str(exc), title=_("Check the accounts"))
-	return company, chosen["name"], from_account, to_account, currency
+	company_currency = clean_text(frappe.db.get_value("Company", company, "default_currency")).upper()
+	from_currency = currencies["from_currency"] or company_currency
+	to_currency = currencies["to_currency"] or company_currency
+	return company, chosen["name"], from_account, to_account, from_currency, to_currency, company_currency
 
 
 def _account_map(names):
@@ -201,10 +227,19 @@ def _shaped_invoice(row, chosen):
 def _load_payments(company, doctype, invoice_names):
 	if not invoice_names:
 		return []
-	reference_fields = ["name", "parent", "reference_doctype", "reference_name", "allocated_amount"]
+	reference_fields = [
+		"name",
+		"parent",
+		"reference_doctype",
+		"reference_name",
+		"allocated_amount",
+		"exchange_rate",
+	]
 	meta = frappe.get_meta("Payment Entry Reference")
 	if meta.has_field("account"):
 		reference_fields.append("account")
+	if meta.has_field("hero_allocated_invoice_amount"):
+		reference_fields.append("hero_allocated_invoice_amount")
 	links = frappe.get_all(
 		"Payment Entry Reference",
 		filters={
@@ -295,7 +330,19 @@ def _load_journals(company, doctype, invoice_names):
 	lines = frappe.get_all(
 		"Journal Entry Account",
 		filters={"parenttype": "Journal Entry", "parent": ["in", names]},
-		fields=["name", "parent", "account", "reference_type", "reference_name", "debit", "credit"],
+		fields=[
+			"name",
+			"parent",
+			"account",
+			"account_currency",
+			"exchange_rate",
+			"debit",
+			"credit",
+			"debit_in_account_currency",
+			"credit_in_account_currency",
+			"reference_type",
+			"reference_name",
+		],
 		limit_page_length=0,
 	)
 	grouped = {}
@@ -355,7 +402,10 @@ def _apply_chain(plan, chain, currency):
 		frappe.db.set_value(
 			invoice["doctype"],
 			invoice["name"],
-			{invoice["account_field"]: invoice["to_account"], "party_account_currency": currency},
+			{
+				invoice["account_field"]: invoice["to_account"],
+				"party_account_currency": invoice.get("account_currency") or currency,
+			},
 			update_modified=True,
 		)
 	for payment in payments:
@@ -371,6 +421,12 @@ def _apply_chain(plan, chain, currency):
 
 
 def _write_payment(payment, currency):
+	if payment.get("restate") and payment["mode"] == SINGLE:
+		_write_restated_payment(payment)
+		return
+	if payment.get("restate") and payment["mode"] == MULTI:
+		_write_restated_multi(payment)
+		return
 	values = {}
 	if payment.get("rewrite_party") and payment.get("party_account_field"):
 		values[payment["party_account_field"]] = payment["party_account"]
@@ -386,7 +442,54 @@ def _write_payment(payment, currency):
 		_align_single_references(payment["name"], payment["party_account"])
 
 
-def _write_reference(reference):
+def _write_restated_payment(payment):
+	allocated_total = flt(payment["party_amount"]) - flt(payment.get("unallocated_amount"))
+	values = {
+		payment["party_account_field"]: payment["party_account"],
+		payment["party_currency_field"]: payment["party_account_currency"],
+		payment["party_amount_field"]: payment["party_amount"],
+		payment["party_rate_field"]: payment["party_exchange_rate"],
+		"total_allocated_amount": allocated_total,
+		"base_total_allocated_amount": payment["base_party_amount"],
+		"unallocated_amount": payment.get("unallocated_amount") or 0,
+	}
+	if payment["payment_type"] == "Pay":
+		values["base_received_amount"] = payment["base_party_amount"]
+	else:
+		values["base_paid_amount"] = payment["base_party_amount"]
+	if payment.get("previous_party_currency") != payment.get("party_account_currency"):
+		if payment["payment_type"] == "Pay":
+			values["received_amount_after_tax"] = payment["party_amount"]
+			values["base_received_amount_after_tax"] = payment["base_party_amount"]
+		else:
+			values["paid_amount_after_tax"] = payment["party_amount"]
+			values["base_paid_amount_after_tax"] = payment["base_party_amount"]
+	if frappe.get_meta("Payment Entry").has_field("hero_multi_account"):
+		values["hero_multi_account"] = 0
+	frappe.db.set_value("Payment Entry", payment["name"], values, update_modified=True)
+	for reference in payment["references"]:
+		_write_reference(reference, restate=True)
+	if payment.get("party_account"):
+		_align_single_references(
+			payment["name"], payment["party_account"], payment.get("party_account_currency")
+		)
+
+
+def _write_restated_multi(payment):
+	if frappe.get_meta("Payment Entry").has_field("hero_multi_account"):
+		frappe.db.set_value("Payment Entry", payment["name"], {"hero_multi_account": 1}, update_modified=True)
+	for reference in payment["references"]:
+		_write_reference(reference, restate=True)
+	if frappe.db.table_exists("Payment Entry Deduction"):
+		for name in frappe.get_all(
+			"Payment Entry Deduction",
+			filters={"parent": payment["name"], "is_exchange_gain_loss": 1},
+			pluck="name",
+		):
+			frappe.db.delete("Payment Entry Deduction", {"name": name})
+
+
+def _write_reference(reference, restate=False):
 	if not reference.get("row_name") or not reference.get("account"):
 		return
 	meta = frappe.get_meta("Payment Entry Reference")
@@ -395,11 +498,27 @@ def _write_reference(reference):
 		values["account"] = reference["account"]
 	if meta.has_field("hero_account"):
 		values["hero_account"] = reference["account"]
+	if restate and reference.get("restate"):
+		values["allocated_amount"] = reference["allocated_amount"]
+		values["exchange_rate"] = reference["exchange_rate"]
+		optional = {
+			"hero_account_currency": reference.get("account_currency"),
+			"hero_invoice_currency": reference.get("invoice_currency"),
+			"hero_allocated_invoice_amount": reference.get("invoice_amount"),
+			"hero_allocated_account_amount": reference.get("allocated_amount"),
+			"hero_payment_rate": reference.get("payment_rate") or reference.get("exchange_rate"),
+			"hero_booked_rate": reference.get("payment_rate") or reference.get("exchange_rate"),
+		}
+		for field, value in optional.items():
+			if meta.has_field(field):
+				values[field] = value
+	elif meta.has_field("hero_account_currency") and reference.get("account_currency"):
+		values["hero_account_currency"] = reference["account_currency"]
 	if values:
 		frappe.db.set_value("Payment Entry Reference", reference["row_name"], values, update_modified=True)
 
 
-def _align_single_references(payment_name, account):
+def _align_single_references(payment_name, account, currency=""):
 	"""A one-account receipt posts every row to the party account, including rows with no allocation."""
 	meta = frappe.get_meta("Payment Entry Reference")
 	values = {}
@@ -407,6 +526,8 @@ def _align_single_references(payment_name, account):
 		values["account"] = account
 	if meta.has_field("hero_account"):
 		values["hero_account"] = account
+	if currency and meta.has_field("hero_account_currency"):
+		values["hero_account_currency"] = currency
 	if not values:
 		return
 	names = frappe.get_all(
@@ -422,12 +543,18 @@ def _write_journal(journal):
 	for line in journal["lines"]:
 		if line["action"] != "move" or not line.get("row_name"):
 			continue
-		frappe.db.set_value(
-			"Journal Entry Account",
-			line["row_name"],
-			{"account": line["account"]},
-			update_modified=True,
-		)
+		values = {"account": line["account"]}
+		if line.get("restate"):
+			meta = frappe.get_meta("Journal Entry Account")
+			for field in (
+				"account_currency",
+				"exchange_rate",
+				"debit_in_account_currency",
+				"credit_in_account_currency",
+			):
+				if meta.has_field(field):
+					values[field] = line[field]
+		frappe.db.set_value("Journal Entry Account", line["row_name"], values, update_modified=True)
 
 
 def _rebuild(doctype, name, from_repost):
@@ -470,7 +597,15 @@ def _mismatch(plan, chain) -> str:
 		invoice = invoices[name]
 		current = flt(frappe.db.get_value(invoice["doctype"], name, "outstanding_amount"))
 		expected = flt(invoice["outstanding_amount"])
-		if abs(current - expected) > 0.01:
+		if not outstanding_matches(
+			expected,
+			current,
+			invoice.get("previous_account_currency") or invoice.get("account_currency"),
+			invoice.get("account_currency"),
+			invoice.get("currency"),
+			invoice.get("conversion_rate"),
+			plan.get("company_currency"),
+		):
 			return _("Outstanding on {0} would change from {1} to {2}.").format(name, expected, current)
 	for name in chain["payments"]:
 		current = _bank_amount(name)
