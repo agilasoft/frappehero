@@ -1,7 +1,7 @@
 # Copyright (c) 2026, Agilasoft and contributors
 # For license information, please see license.txt
 
-"""Cheque number sets and the Pay assignment rules.
+"""Cheque number sets and the assignment rules for Pay and Internal Transfer.
 
 Pure functions. The desk and Payment Entry call these, and the tests run
 without a site.
@@ -23,7 +23,7 @@ class ChequeError(ValueError):
 
 
 def mode_uses_cheque_leaf(mode_name, flagged=0) -> bool:
-	"""True when Pay entries with this mode draw a number from a Cheque Leaf.
+	"""True when Pay and Internal Transfer entries with this mode draw a number.
 
 	The mode name counts when it says cheque or check. A tick on the mode
 	covers every other name a company uses for the same instrument.
@@ -31,6 +31,11 @@ def mode_uses_cheque_leaf(mode_name, flagged=0) -> bool:
 	if as_flag(flagged):
 		return True
 	return bool(_CHEQUE_MODE.search(clean_text(mode_name)))
+
+
+def payment_draws_cheque(payment_type) -> bool:
+	"""Pay and Internal Transfer issue a cheque. The number comes off the paying bank."""
+	return clean_text(payment_type) in ("Pay", "Internal Transfer")
 
 
 def generate_range(prefix, start, end, padding) -> list[str]:
@@ -262,7 +267,7 @@ def preview_cheque(
 	selected="",
 	mode_uses_cheque=False,
 ) -> dict:
-	"""The leaf and next free number a Pay form can offer. Nothing is reserved."""
+	"""The leaf and next free number a payment form can offer. Nothing is reserved."""
 	leaf_name, error = resolve_leaf(
 		leaves,
 		bank_account=bank_account,
@@ -326,13 +331,15 @@ def plan_payment_cheque(
 			previous_number,
 			numbers_by_leaf,
 		)
-	if payment_type != "Pay":
+	if not payment_draws_cheque(payment_type):
 		updates, cleared = _release_held(previous_leaf, previous_number, payment_name, numbers_by_leaf)
 		return _result(
 			updates=updates,
 			clear_reference_no=cleared and clean_text(reference_no) == previous_number,
 		)
 	if not clean_text(bank_account) and (clean_text(selected_leaf) or mode_uses_cheque):
+		if payment_type == "Internal Transfer":
+			return _result(error="Link Account Paid From to a Bank Account before assigning a cheque number.")
 		return _result(error="Set the company bank account before assigning a cheque number.")
 	if not clean_text(bank_account):
 		updates, cleared = _release_held(previous_leaf, previous_number, payment_name, numbers_by_leaf)

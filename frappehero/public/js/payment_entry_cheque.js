@@ -1,12 +1,15 @@
 // Copyright (c) 2026, Agilasoft and contributors
 // For license information, please see license.txt
 
+const CHEQUE_PAYMENT_TYPES = ["Pay", "Internal Transfer"];
+
 frappe.ui.form.on("Payment Entry", {
 	setup(frm) {
 		frm.set_query("hero_cheque_leaf", () => {
 			const filters = { status: "Active" };
-			if (frm.doc.bank_account) {
-				filters.bank_account = frm.doc.bank_account;
+			const bank = known_bank_account(frm);
+			if (bank) {
+				filters.bank_account = bank;
 			}
 			if (frm.doc.company) {
 				filters.company = frm.doc.company;
@@ -16,33 +19,57 @@ frappe.ui.form.on("Payment Entry", {
 	},
 
 	refresh(frm) {
-		if (frm.doc.docstatus !== 0 || frm.doc.payment_type !== "Pay") {
+		if (frm.doc.docstatus !== 0 || !draws_cheque(frm)) {
 			return;
 		}
 		frm.add_custom_button(__("Assign Cheque Number"), () => assign_cheque(frm), __("Cheque"));
 	},
 
 	async payment_type(frm) {
-		if (frm.doc.payment_type !== "Pay") {
+		forget_bank_account(frm);
+		if (!draws_cheque(frm)) {
 			await clear_cheque(frm);
 			return;
 		}
+		await clear_cheque(frm);
 		await suggest_cheque(frm);
 	},
 
 	async bank_account(frm) {
+		if (frm.doc.payment_type !== "Pay") {
+			return;
+		}
+		await clear_cheque(frm);
+		await suggest_cheque(frm);
+	},
+
+	async paid_from(frm) {
+		if (frm.doc.payment_type !== "Internal Transfer") {
+			return;
+		}
+		forget_bank_account(frm);
+		await clear_cheque(frm);
+		await suggest_cheque(frm);
+	},
+
+	async company(frm) {
+		if (frm.doc.payment_type !== "Internal Transfer") {
+			return;
+		}
+		forget_bank_account(frm);
 		await clear_cheque(frm);
 		await suggest_cheque(frm);
 	},
 
 	async mode_of_payment(frm) {
-		if (frm.__cheque_silent || frm.doc.docstatus !== 0 || frm.doc.payment_type !== "Pay") {
+		if (frm.__cheque_silent || frm.doc.docstatus !== 0 || !draws_cheque(frm)) {
 			return;
 		}
-		if (!frm.doc.bank_account) {
+		const bank = await source_bank_account(frm);
+		if (!bank) {
 			return;
 		}
-		const preview = await load_preview(frm);
+		const preview = await load_preview(frm, bank);
 		if (preview && !preview.uses_cheque) {
 			await clear_cheque(frm);
 			return;
@@ -55,6 +82,73 @@ frappe.ui.form.on("Payment Entry", {
 	},
 });
 
+function draws_cheque(frm) {
+	return CHEQUE_PAYMENT_TYPES.includes(frm.doc.payment_type);
+}
+
+function forget_bank_account(frm) {
+	frm.__cheque_bank_account = "";
+	frm.__cheque_bank_for = "";
+	frm.__cheque_bank_company = "";
+	frm.__cheque_bank_resolved = false;
+}
+
+function known_bank_account(frm) {
+	if (frm.doc.payment_type === "Pay") {
+		return frm.doc.bank_account || "";
+	}
+	if (frm.doc.payment_type !== "Internal Transfer") {
+		return "";
+	}
+	if (frm.__cheque_bank_resolved && frm.__cheque_bank_for === (frm.doc.paid_from || "")) {
+		return frm.__cheque_bank_account || "";
+	}
+	return frm.doc.paid_from_bank_account || "";
+}
+
+function bank_missing_message(frm) {
+	if (frm.doc.payment_type === "Internal Transfer") {
+		return __("Link Account Paid From to a Bank Account before assigning a cheque number.");
+	}
+	return __("Set the company bank account before assigning a cheque number.");
+}
+
+async function source_bank_account(frm) {
+	if (frm.doc.payment_type === "Pay") {
+		return frm.doc.bank_account || "";
+	}
+	if (frm.doc.payment_type !== "Internal Transfer") {
+		return "";
+	}
+	const account = frm.doc.paid_from || "";
+	const company = frm.doc.company || "";
+	if (!account) {
+		forget_bank_account(frm);
+		return "";
+	}
+	if (
+		frm.__cheque_bank_resolved &&
+		frm.__cheque_bank_for === account &&
+		frm.__cheque_bank_company === company
+	) {
+		return frm.__cheque_bank_account || "";
+	}
+	const filters = { account, disabled: 0 };
+	if (company) {
+		filters.company = company;
+	}
+	const response = await frappe.db.get_value("Bank Account", filters, "name");
+	if (frm.doc.paid_from !== account || (frm.doc.company || "") !== company) {
+		return "";
+	}
+	const name = (response && response.message && response.message.name) || "";
+	frm.__cheque_bank_account = name;
+	frm.__cheque_bank_for = account;
+	frm.__cheque_bank_company = company;
+	frm.__cheque_bank_resolved = true;
+	return name;
+}
+
 async function clear_cheque(frm) {
 	if (frm.__cheque_silent || (!frm.doc.hero_cheque_leaf && !frm.doc.hero_cheque_number)) {
 		return;
@@ -66,14 +160,20 @@ async function clear_cheque(frm) {
 }
 
 async function suggest_cheque(frm, leafChanged) {
-	if (frm.__cheque_silent || frm.doc.docstatus !== 0 || frm.doc.payment_type !== "Pay") {
+	if (frm.__cheque_silent || frm.doc.docstatus !== 0 || !draws_cheque(frm)) {
 		return;
 	}
-	if (!frm.doc.bank_account && !frm.doc.hero_cheque_leaf) {
+	frm.__cheque_generation = (frm.__cheque_generation || 0) + 1;
+	const generation = frm.__cheque_generation;
+	const bank = await source_bank_account(frm);
+	if (frm.__cheque_silent || generation !== frm.__cheque_generation) {
 		return;
 	}
-	const preview = await load_preview(frm);
-	if (!preview) {
+	if (!bank && !frm.doc.hero_cheque_leaf) {
+		return;
+	}
+	const preview = await load_preview(frm, bank);
+	if (frm.__cheque_silent || generation !== frm.__cheque_generation || !preview) {
 		return;
 	}
 	if (preview.error && (frm.doc.hero_cheque_leaf || preview.uses_cheque)) {
@@ -92,14 +192,15 @@ async function suggest_cheque(frm, leafChanged) {
 }
 
 async function assign_cheque(frm) {
-	if (frm.doc.payment_type !== "Pay") {
+	if (!draws_cheque(frm)) {
 		return;
 	}
-	if (!frm.doc.bank_account) {
-		frappe.msgprint(__("Set the company bank account before assigning a cheque number."));
+	const bank = await source_bank_account(frm);
+	if (!bank) {
+		frappe.msgprint(bank_missing_message(frm));
 		return;
 	}
-	const preview = await load_preview(frm);
+	const preview = await load_preview(frm, bank);
 	if (!preview || preview.error) {
 		frappe.msgprint(
 			(preview && preview.error) || __("Choose an active Cheque Leaf for this bank account.")
@@ -132,12 +233,12 @@ async function assign_cheque(frm) {
 	);
 }
 
-function load_preview(frm) {
+function load_preview(frm, bank) {
 	return frappe
 		.call({
 			method: "frappehero.finance_desk.cheque.suggest_cheque",
 			args: {
-				bank_account: frm.doc.bank_account,
+				bank_account: bank || "",
 				company: frm.doc.company,
 				mode_of_payment: frm.doc.mode_of_payment,
 				leaf: frm.doc.hero_cheque_leaf,

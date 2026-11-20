@@ -88,8 +88,10 @@ scheduler_events = {
 # Permission Studio writes User Permissions. The ownership fields are read-only
 # in the desk and are restored on validate unless the sync flag is set.
 # BSP rates do the same for the BSP Rate check on Currency Exchange.
-# Cheque Leaf reserves a number on Payment Entry before ERPNext asks for the
-# bank reference, then marks it used, void, or free as the payment moves.
+# Cheque Leaf reserves a number on a Pay or Internal Transfer before ERPNext
+# asks for the bank reference, then marks it used, void, or free as the
+# payment moves. An Internal Transfer draws that number from the Bank Account
+# on Account Paid From.
 # Payment references also show the invoice currency and the invoice total in
 # that currency. Grand Total, Outstanding, and Allocated stay in the party
 # account currency.

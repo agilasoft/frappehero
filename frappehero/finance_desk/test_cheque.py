@@ -10,6 +10,7 @@ from frappehero.finance_desk.cheque_logic import (
 	filter_leaves,
 	generate_range,
 	mode_uses_cheque_leaf,
+	payment_draws_cheque,
 	parse_extra_numbers,
 	plan_payment_cheque,
 	preview_cheque,
@@ -139,6 +140,9 @@ class TestAssignment(unittest.TestCase):
 		self.assertTrue(mode_uses_cheque_leaf("Wire", flagged=1))
 		self.assertFalse(mode_uses_cheque_leaf("Wire Transfer"))
 		self.assertFalse(mode_uses_cheque_leaf("Checking"))
+		self.assertTrue(payment_draws_cheque("Pay"))
+		self.assertTrue(payment_draws_cheque("Internal Transfer"))
+		self.assertFalse(payment_draws_cheque("Receive"))
 
 	def test_pay_takes_the_next_number_and_keeps_it(self):
 		first = _plan()
@@ -176,6 +180,21 @@ class TestAssignment(unittest.TestCase):
 		self.assertEqual(taken["updates"], {})
 		cancelled = _plan(requested_number="1001", numbers_by_leaf={"Current": _numbers(("1001", "Cancelled", "PE-9"))})
 		self.assertIn("cancelled", cancelled["error"])
+
+	def test_internal_transfer_takes_the_next_number(self):
+		planned = _plan(payment_type="Internal Transfer")
+		self.assertIsNone(planned["error"])
+		self.assertEqual(planned["leaf"], "Current")
+		self.assertEqual(planned["cheque_number"], "1001")
+		self.assertEqual(planned["state"], "Assigned")
+		self.assertTrue(planned["set_reference_no"])
+		self.assertEqual(planned["updates"]["Current"][0]["status"], "Assigned")
+		missing = _plan(payment_type="Internal Transfer", bank_account="")
+		self.assertIn("Account Paid From", missing["error"])
+		self.assertEqual(missing["updates"], {})
+		idle = _plan(payment_type="Internal Transfer", bank_account="", mode_uses_cheque=False)
+		self.assertIsNone(idle["error"])
+		self.assertEqual(idle["cheque_number"], "")
 
 	def test_receive_releases_a_draft_reservation(self):
 		cleared = _plan(
