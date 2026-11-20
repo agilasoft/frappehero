@@ -4,6 +4,7 @@
 frappe.ui.form.on("Payment Entry", {
 	refresh(frm) {
 		set_queries(frm);
+		hide_calculated_amounts(frm);
 		ensure_company_currency(frm);
 		stamp_payment_currency(frm);
 		if (frm.doc.docstatus === 0 && frm.doc.payment_type !== "Internal Transfer") {
@@ -123,24 +124,49 @@ frappe.ui.form.on("Payment Entry Reference", {
 		queue_preview(frm);
 	},
 
-	hero_bank_amount(frm, cdt, cdn) {
-		if (frm._hero_multi_lock) {
-			return;
-		}
-		ensure_company_currency(frm);
-		const row = locals[cdt][cdn];
-		if (row) {
-			row.hero_allocation_basis = "Payment";
-			delete row._hero_ref_fill;
-		}
-		convert_allocation(frm, cdt, cdn);
-		queue_preview(frm);
-	},
-
 	hero_payment_rate(frm) {
 		queue_preview(frm);
 	},
 });
+
+const HIDDEN_REFERENCE_FIELDS = [
+	"total_amount",
+	"outstanding_amount",
+	"allocated_amount",
+	"account",
+	"account_type",
+	"payment_type",
+	"exchange_rate",
+	"exchange_gain_loss",
+	"hero_account",
+	"hero_account_currency",
+	"hero_allocated_account_amount",
+	"hero_booked_rate",
+	"hero_payment_rate",
+	"hero_payment_currency",
+	"hero_bank_amount",
+	"hero_allocation_basis",
+];
+
+function hide_calculated_amounts(frm) {
+	const grid = frm.fields_dict.references && frm.fields_dict.references.grid;
+	if (!grid || grid._hero_amounts_hidden || !frappe.meta) {
+		return;
+	}
+	grid._hero_amounts_hidden = true;
+	HIDDEN_REFERENCE_FIELDS.forEach((fieldname) => {
+		const field = frappe.meta.get_docfield("Payment Entry Reference", fieldname, frm.doc.name);
+		if (!field) {
+			return;
+		}
+		field.hidden = 1;
+		field.read_only = 1;
+		field.in_list_view = 0;
+	});
+	if (typeof grid.setup_visible_columns === "function") {
+		grid.setup_visible_columns();
+	}
+}
 
 function set_queries(frm) {
 	const account_type = frm.doc.party_type === "Customer" ? "Receivable" : "Payable";
@@ -403,12 +429,10 @@ function convert_allocation(frm, cdt, cdn) {
 	if (!invoiceCurrency || !payingCurrency) {
 		return;
 	}
-	const basis = row.hero_allocation_basis === "Payment" ? "Payment" : "Invoice";
 	let invoiceAmount;
 	let payingAmount;
 	if (invoiceCurrency === payingCurrency) {
-		const source = basis === "Payment" ? row.hero_bank_amount : row.hero_allocated_invoice_amount;
-		invoiceAmount = money(source);
+		invoiceAmount = money(row.hero_allocated_invoice_amount);
 		payingAmount = invoiceAmount;
 	} else {
 		const rate = invoice_rate(row);
@@ -416,13 +440,8 @@ function convert_allocation(frm, cdt, cdn) {
 		if (!(rate > 0) || !(bankRate > 0)) {
 			return;
 		}
-		if (basis === "Payment") {
-			payingAmount = money(row.hero_bank_amount);
-			invoiceAmount = money((payingAmount * bankRate) / rate);
-		} else {
-			invoiceAmount = money(row.hero_allocated_invoice_amount);
-			payingAmount = money((invoiceAmount * rate) / bankRate);
-		}
+		invoiceAmount = money(row.hero_allocated_invoice_amount);
+		payingAmount = money((invoiceAmount * rate) / bankRate);
 	}
 	write_allocation(
 		frm,
