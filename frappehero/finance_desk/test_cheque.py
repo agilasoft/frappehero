@@ -14,6 +14,7 @@ from frappehero.finance_desk.cheque_logic import (
 	parse_extra_numbers,
 	plan_payment_cheque,
 	preview_cheque,
+	reconcile_issued_cheques,
 	summarize_book,
 	summarize_numbers,
 	validate_leaf_shape,
@@ -306,6 +307,165 @@ class TestAssignment(unittest.TestCase):
 		self.assertEqual(preview["cheque_number"], "1002")
 		self.assertEqual(preview["available"], ["1002"])
 		self.assertIsNone(preview["error"])
+
+
+def _transfer(**overrides):
+	base = {
+		"name": "PE-1",
+		"payment_type": "Internal Transfer",
+		"docstatus": 1,
+		"reference_no": "1001",
+		"bank_account": "BDO",
+		"company": "Acme",
+		"posting_date": "2026-01-02",
+		"party": "Cash - AC",
+		"hero_cheque_leaf": "",
+		"hero_cheque_number": "",
+		"hero_cheque_state": "",
+	}
+	base.update(overrides)
+	return base
+
+
+def _book(*rows):
+	parsed = []
+	for index, row in enumerate(rows, start=1):
+		parsed.append(
+			{
+				"name": row.get("name") or f"n{index}",
+				"cheque_number": row["cheque_number"],
+				"status": row.get("status") or "Available",
+				"payment_entry": row.get("payment_entry") or "",
+				"party": row.get("party") or "",
+				"posting_date": row.get("posting_date"),
+			}
+		)
+	return parsed
+
+
+class TestIssuedTransfers(unittest.TestCase):
+	def test_submitted_transfer_marks_the_number_used(self):
+		result = reconcile_issued_cheques(
+			[_transfer(reference_no=" 1001 ")],
+			[_leaf("Current", "BDO")],
+			{"Current": _book({"cheque_number": "1001"}, {"cheque_number": "1002"})},
+		)
+		marked = result["numbers"][0]
+		self.assertEqual(marked["status"], "Used")
+		self.assertEqual(marked["payment_entry"], "PE-1")
+		self.assertEqual(marked["party"], "Cash - AC")
+		self.assertEqual(marked["posting_date"], "2026-01-02")
+		self.assertEqual(marked["cheque_number"], "1001")
+		self.assertEqual(result["payments"][0]["hero_cheque_leaf"], "Current")
+		self.assertEqual(result["payments"][0]["hero_cheque_number"], "1001")
+		self.assertEqual(result["payments"][0]["hero_cheque_state"], "Used")
+		self.assertEqual(result["skipped"], [])
+		second = reconcile_issued_cheques(
+			[
+				_transfer(
+					hero_cheque_leaf="Current",
+					hero_cheque_number="1001",
+					hero_cheque_state="Used",
+				)
+			],
+			[_leaf("Current", "BDO")],
+			{
+				"Current": _book(
+					{
+						"cheque_number": "1001",
+						"status": "Used",
+						"payment_entry": "PE-1",
+						"party": "Cash - AC",
+						"posting_date": "2026-01-02",
+					},
+					{"cheque_number": "1002"},
+				)
+			},
+		)
+		self.assertEqual(second["numbers"], [])
+		self.assertEqual(second["payments"], [])
+
+	def test_draft_reserves_and_cancelled_voids(self):
+		draft = reconcile_issued_cheques(
+			[_transfer(docstatus=0)],
+			[_leaf("Current", "BDO")],
+			{"Current": _book({"cheque_number": "1001"})},
+		)
+		self.assertEqual(draft["numbers"][0]["status"], "Assigned")
+		self.assertEqual(draft["payments"][0]["hero_cheque_state"], "Assigned")
+		voided = reconcile_issued_cheques(
+			[_transfer(docstatus=2)],
+			[_leaf("Current", "BDO")],
+			{"Current": _book({"cheque_number": "1001"})},
+		)
+		self.assertEqual(voided["numbers"][0]["status"], "Cancelled")
+		self.assertEqual(voided["payments"][0]["hero_cheque_state"], "Cancelled")
+
+	def test_a_live_payment_keeps_the_number_ahead_of_a_cancelled_one(self):
+		result = reconcile_issued_cheques(
+			[
+				_transfer(name="PE-OLD", docstatus=2, posting_date="2026-01-01"),
+				_transfer(name="PE-NEW", docstatus=1, posting_date="2026-02-01"),
+			],
+			[_leaf("Current", "BDO")],
+			{"Current": _book({"cheque_number": "1001"})},
+		)
+		self.assertEqual(result["numbers"][0]["payment_entry"], "PE-NEW")
+		self.assertEqual(result["numbers"][0]["status"], "Used")
+		self.assertEqual(result["payments"][0]["name"], "PE-NEW")
+		self.assertIn("PE-NEW", result["skipped"][0]["reason"])
+		self.assertEqual(result["skipped"][0]["payment"], "PE-OLD")
+
+	def test_a_number_held_by_another_payment_stays(self):
+		result = reconcile_issued_cheques(
+			[_transfer()],
+			[_leaf("Current", "BDO")],
+			{"Current": _book({"cheque_number": "1001", "status": "Used", "payment_entry": "PE-9"})},
+		)
+		self.assertEqual(result["numbers"], [])
+		self.assertEqual(result["payments"], [])
+		self.assertIn("PE-9", result["skipped"][0]["reason"])
+
+	def test_a_reference_that_is_not_on_the_paying_bank_is_left_alone(self):
+		missing = reconcile_issued_cheques(
+			[_transfer(reference_no="9999")],
+			[_leaf("Current", "BDO")],
+			{"Current": _book({"cheque_number": "1001"})},
+		)
+		self.assertEqual(missing, {"numbers": [], "payments": [], "skipped": []})
+		other_bank = reconcile_issued_cheques(
+			[_transfer()],
+			[_leaf("Other", "BPI")],
+			{"Other": _book({"cheque_number": "1001"})},
+		)
+		self.assertEqual(other_bank["numbers"], [])
+		self.assertEqual(other_bank["skipped"], [])
+		pay = reconcile_issued_cheques(
+			[_transfer(payment_type="Pay")],
+			[_leaf("Current", "BDO")],
+			{"Current": _book({"cheque_number": "1001"})},
+		)
+		self.assertEqual(pay["numbers"], [])
+
+	def test_the_number_already_on_the_leaf_still_fills_the_payment(self):
+		result = reconcile_issued_cheques(
+			[_transfer(reference_no="", hero_cheque_number="1001")],
+			[_leaf("Current", "BDO", status="Closed")],
+			{
+				"Current": _book(
+					{
+						"cheque_number": "1001",
+						"status": "Used",
+						"payment_entry": "PE-1",
+						"party": "Cash - AC",
+						"posting_date": "2026-01-02",
+					}
+				)
+			},
+		)
+		self.assertEqual(result["numbers"], [])
+		self.assertEqual(result["payments"][0]["hero_cheque_state"], "Used")
+		self.assertEqual(result["skipped"], [])
 
 
 class TestLeafList(unittest.TestCase):

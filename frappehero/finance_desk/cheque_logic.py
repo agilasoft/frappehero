@@ -392,6 +392,90 @@ def plan_payment_cheque(
 	)
 
 
+def reconcile_issued_cheques(payments, leaves, numbers_by_leaf) -> dict:
+	"""Mark leaf numbers that an Internal Transfer already issued.
+
+	Older transfers stored the cheque on Cheque/Reference No and left the leaf
+	untouched. A submitted payment marks the number Used, a draft reserves it,
+	and a cancelled payment voids it. A number held by another payment stays
+	where it is. Running this again changes nothing once the rows match.
+	"""
+	leaves = list(leaves or [])
+	books = {
+		clean_text(leaf_name): [_issued_copy(row) for row in rows or []]
+		for leaf_name, rows in (numbers_by_leaf or {}).items()
+	}
+	number_updates = []
+	payment_updates = []
+	skipped = []
+	for payment in sorted(list(payments or []), key=_issued_rank):
+		if clean_text(payment.get("payment_type")) != "Internal Transfer":
+			continue
+		payment_name = clean_text(payment.get("name"))
+		bank = clean_text(payment.get("bank_account"))
+		number = clean_text(payment.get("reference_no")) or clean_text(payment.get("hero_cheque_number"))
+		if not payment_name or not bank or not number:
+			continue
+		try:
+			docstatus = int(payment.get("docstatus"))
+		except (TypeError, ValueError):
+			continue
+		target = {0: "Assigned", 1: "Used", 2: "Cancelled"}.get(docstatus)
+		if not target:
+			continue
+		matches = _issued_matches(leaves, books, bank, clean_text(payment.get("company")), number)
+		if not matches:
+			continue
+		chosen = _choose_issued(matches, payment_name, target)
+		if chosen is None:
+			skipped.append(
+				{
+					"payment": payment_name,
+					"cheque_number": number,
+					"reason": f"Cheque {number} matches more than one Cheque Leaf row.",
+				}
+			)
+			continue
+		leaf, row = chosen
+		reason = _issued_block(row, payment_name, target)
+		if reason:
+			skipped.append({"payment": payment_name, "cheque_number": number, "reason": reason})
+			continue
+		party = clean_text(payment.get("party"))[:140]
+		posting_date = payment.get("posting_date") or None
+		leaf_name = clean_text(leaf.get("name"))
+		if _issued_row_changed(row, target, payment_name, party, posting_date):
+			number_updates.append(
+				{
+					"name": clean_text(row.get("name")),
+					"leaf": leaf_name,
+					"cheque_number": number,
+					"status": target,
+					"payment_entry": payment_name,
+					"party": party,
+					"posting_date": posting_date,
+				}
+			)
+		row["status"] = target
+		row["payment_entry"] = payment_name
+		row["party"] = party
+		row["posting_date"] = posting_date
+		if (
+			clean_text(payment.get("hero_cheque_leaf")) != leaf_name
+			or clean_text(payment.get("hero_cheque_number")) != number
+			or clean_text(payment.get("hero_cheque_state")) != target
+		):
+			payment_updates.append(
+				{
+					"name": payment_name,
+					"hero_cheque_leaf": leaf_name,
+					"hero_cheque_number": number,
+					"hero_cheque_state": target,
+				}
+			)
+	return {"numbers": number_updates, "payments": payment_updates, "skipped": skipped}
+
+
 def resolve_leaf(
 	leaves,
 	bank_account,
@@ -446,6 +530,102 @@ def resolve_leaf(
 	if not active:
 		return "", f"Add an active Cheque Leaf for {bank_account} before paying by cheque."
 	return "", f"Choose a Cheque Leaf for {bank_account}. More than one active set is available."
+
+
+def _issued_matches(leaves, books, bank, company, number):
+	found = []
+	for leaf in leaves or []:
+		if clean_text(leaf.get("bank_account")) != bank:
+			continue
+		leaf_company = clean_text(leaf.get("company"))
+		if company and leaf_company and leaf_company != company:
+			continue
+		for row in books.get(clean_text(leaf.get("name"))) or []:
+			if clean_text(row.get("cheque_number")) == number:
+				found.append((leaf, row))
+	return found
+
+
+def _choose_issued(matches, payment_name, target):
+	own = [item for item in matches if clean_text(item[1].get("payment_entry")) == payment_name]
+	if own:
+		return own[0]
+	free = []
+	for leaf, row in matches:
+		status = clean_text(row.get("status")) or "Available"
+		owner = clean_text(row.get("payment_entry"))
+		if status == "Available" or (status == "Assigned" and not owner):
+			free.append((leaf, row))
+		elif status == "Cancelled" and not owner and target == "Cancelled":
+			free.append((leaf, row))
+	if len(free) == 1:
+		return free[0]
+	if len(free) > 1:
+		free.sort(
+			key=lambda item: (
+				0 if clean_text(item[0].get("status")) == "Active" else 1,
+				clean_text(item[0].get("name")),
+			)
+		)
+		return free[0]
+	if len(matches) == 1:
+		return matches[0]
+	return None
+
+
+def _issued_block(row, payment_name, target):
+	status = clean_text(row.get("status")) or "Available"
+	owner = clean_text(row.get("payment_entry"))
+	number = clean_text(row.get("cheque_number"))
+	if owner and owner != payment_name and status in HELD_STATUSES:
+		return f"Cheque {number} is already {status.lower()} on {owner}."
+	if owner and owner != payment_name and status == "Cancelled":
+		return f"Cheque {number} is already cancelled on {owner}."
+	if status == "Cancelled" and target != "Cancelled":
+		return f"Cheque {number} is cancelled on this Cheque Leaf."
+	if status == "Used" and target == "Assigned":
+		return f"Cheque {number} is already used on this payment."
+	if status == "Available" or status == target:
+		return None
+	if status == "Assigned" and owner in ("", payment_name) and target in ("Used", "Cancelled"):
+		return None
+	if status == "Used" and owner in ("", payment_name) and target == "Cancelled":
+		return None
+	return f"Cheque {number} is {status.lower()}."
+
+
+def _issued_row_changed(row, status, payment_name, party, posting_date) -> bool:
+	return (
+		clean_text(row.get("status")) != status
+		or clean_text(row.get("payment_entry")) != payment_name
+		or clean_text(row.get("party")) != party
+		or _date_key(row.get("posting_date")) != _date_key(posting_date)
+	)
+
+
+def _issued_copy(row) -> dict:
+	return {
+		"name": clean_text(row.get("name")),
+		"cheque_number": clean_text(row.get("cheque_number")),
+		"status": clean_text(row.get("status")) or "Available",
+		"payment_entry": clean_text(row.get("payment_entry")),
+		"party": clean_text(row.get("party")),
+		"posting_date": row.get("posting_date") or None,
+	}
+
+
+def _issued_rank(payment):
+	try:
+		docstatus = int(payment.get("docstatus"))
+	except (TypeError, ValueError):
+		docstatus = 9
+	rank = {1: 0, 0: 1, 2: 2}.get(docstatus, 9)
+	return (rank, str(payment.get("posting_date") or ""), clean_text(payment.get("name")))
+
+
+def _date_key(value) -> str:
+	text = clean_text(value)
+	return text[:10] if text else ""
 
 
 def _finish_payment(action, payment_name, previous_leaf, previous_number, numbers_by_leaf) -> dict:
