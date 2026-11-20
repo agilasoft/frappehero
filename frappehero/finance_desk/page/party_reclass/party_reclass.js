@@ -23,7 +23,7 @@ frappehero.PartyReclass = class PartyReclass {
 		this.page.main.addClass("fh-page");
 		this.page.main.html(`
 			<div class="fh-app">
-				<p class="fh-muted">${__("Move submitted sales or purchase invoices from one receivable or payable to another of the same currency. Receipts and journals that post those invoices move with them. Amounts stay as submitted. Nothing is cancelled.")}</p>
+				<p class="fh-muted">${__("Move submitted sales or purchase invoices from one receivable or payable to another. The new account can use a different currency. Receipts and journals that post those invoices move with them. The company-currency amount and the bank amount stay as submitted. Nothing is cancelled.")}</p>
 				<div class="fh-filters">
 					<div class="fh-company"></div>
 					<div class="fh-side"></div>
@@ -128,6 +128,7 @@ frappehero.PartyReclass = class PartyReclass {
 			<div class="fh-stat"><b>${counts.move_invoices || 0}</b><span>${__("Invoices to move")}</span></div>
 			<div class="fh-stat"><b>${counts.move_payments || 0}</b><span>${__("Payments to move")}</span></div>
 			<div class="fh-stat"><b>${counts.move_journals || 0}</b><span>${__("Journals to move")}</span></div>
+			<div class="fh-stat"><b>${counts.stay_invoices || 0}</b><span>${__("Invoices staying")}</span></div>
 			<div class="fh-stat"><b>${counts.held_invoices || 0}</b><span>${__("Invoices held")}</span></div>
 		`);
 		const notes = [];
@@ -139,7 +140,7 @@ frappehero.PartyReclass = class PartyReclass {
 		}
 		notes.push(
 			`<p class="fh-muted">${__(
-				"Customer and supplier default accounts stay as they are. Cancelled documents stay as they are. A voucher that would change an amount is left unchanged."
+				"An invoice in another currency stays on the current account. When the currency changes, an unallocated advance stays on the current account. Customer and supplier default accounts stay as they are. Cancelled documents stay as they are."
 			)}</p>`
 		);
 		this.page.main.find(".fh-note").html(notes.join(""));

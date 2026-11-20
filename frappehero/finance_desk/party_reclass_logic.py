@@ -4,8 +4,10 @@
 """Move submitted invoices from one receivable or payable to another.
 
 Pure functions. The desk page calls these, and the tests run without a site.
-The destination uses the same currency, so amounts stay as submitted. Receipts
-and journals that post the invoice move with it. Nothing here cancels a document.
+The destination can use another currency. A change is between the invoice
+currency and the company currency, and the company-currency amount stays as
+submitted. Receipts and journals that post the invoice move with it. Nothing
+here cancels a document.
 """
 
 from decimal import ROUND_HALF_UP, Decimal
@@ -18,6 +20,7 @@ RECEIVABLE = "receivable"
 PAYABLE = "payable"
 MOVE = "move"
 HELD = "held"
+STAY = "stay"
 SINGLE = "single"
 MULTI = "multi"
 _SIDES = {
@@ -48,10 +51,10 @@ def side_choice(value) -> dict:
 	return {"name": key, **_SIDES[key]}
 
 
-def check_accounts(company, side, from_account, to_account, accounts) -> str:
-	"""Both ledgers must be the same currency and the account type of this side.
+def check_accounts(company, side, from_account, to_account, accounts) -> dict:
+	"""Both ledgers must be the account type of this side.
 
-	Returns the shared account currency.
+	Returns the currency of each account. They can differ.
 	"""
 	chosen = side_choice(side)
 	company = clean_text(company)
@@ -72,26 +75,37 @@ def check_accounts(company, side, from_account, to_account, accounts) -> str:
 	other = _account_error(
 		errors, accounts, to_account, company, chosen["account_type"], "The account to use"
 	)
-	if currency and other and currency != other:
-		errors.append(
-			f"The account to use is in {other}, and the account to leave is in {currency}. "
-			"A reclass keeps the currency."
-		)
 	if errors:
 		raise PartyReclassError(" ".join(errors))
-	return currency
+	return {"from_currency": currency, "to_currency": other}
 
 
-def plan_reclass(company, side, from_account, to_account, invoices, payments, journals) -> dict:
+def plan_reclass(
+	company,
+	side,
+	from_account,
+	to_account,
+	invoices,
+	payments,
+	journals,
+	company_currency="",
+	from_currency="",
+	to_currency="",
+) -> dict:
 	"""Plan the move. A held voucher keeps its invoices on the current account."""
 	chosen = side_choice(side)
 	company = clean_text(company)
 	from_account = clean_text(from_account)
 	to_account = clean_text(to_account)
+	company_currency = clean_text(company_currency).upper()
+	from_currency = clean_text(from_currency).upper()
+	to_currency = clean_text(to_currency).upper()
 	invoice_rows = []
 	by_name = {}
 	for source in invoices or []:
-		row = _invoice_row(source, chosen, company, from_account, to_account)
+		row = _invoice_row(
+			source, chosen, company, from_account, to_account, company_currency, from_currency, to_currency
+		)
 		if row is None:
 			context = _context_invoice(source, chosen, company)
 			if context and context["name"] not in by_name:
@@ -102,13 +116,33 @@ def plan_reclass(company, side, from_account, to_account, invoices, payments, jo
 
 	payment_rows = []
 	for source in payments or []:
-		row = _payment_row(source, company, by_name, from_account, to_account, chosen["doctype"])
+		row = _payment_row(
+			source,
+			company,
+			by_name,
+			from_account,
+			to_account,
+			chosen["doctype"],
+			company_currency,
+			from_currency,
+			to_currency,
+		)
 		if row is not None:
 			payment_rows.append(row)
 
 	journal_rows = []
 	for source in journals or []:
-		row = _journal_row(source, company, by_name, from_account, to_account, chosen["doctype"])
+		row = _journal_row(
+			source,
+			company,
+			by_name,
+			from_account,
+			to_account,
+			chosen["doctype"],
+			company_currency,
+			from_currency,
+			to_currency,
+		)
 		if row is not None:
 			journal_rows.append(row)
 
@@ -138,6 +172,9 @@ def plan_reclass(company, side, from_account, to_account, invoices, payments, jo
 		"account_field": chosen["account_field"],
 		"from_account": from_account,
 		"to_account": to_account,
+		"company_currency": company_currency,
+		"from_currency": from_currency,
+		"to_currency": to_currency,
 		"invoices": invoice_rows,
 		"payments": payment_rows,
 		"journals": journal_rows,
@@ -149,6 +186,7 @@ def plan_reclass(company, side, from_account, to_account, invoices, payments, jo
 		},
 		"counts": {
 			"move_invoices": len(moving_invoices),
+			"stay_invoices": sum(1 for row in invoice_rows if row["action"] == STAY),
 			"held_invoices": sum(1 for row in invoice_rows if row["action"] == HELD),
 			"move_payments": len(moving_payments),
 			"held_payments": sum(1 for row in payment_rows if row["action"] == HELD),
@@ -186,7 +224,9 @@ def _account_error(errors, accounts, name, company, account_type, label) -> str:
 	return clean_text(row.get("account_currency")).upper()
 
 
-def _invoice_row(source, chosen, company, from_account, to_account):
+def _invoice_row(
+	source, chosen, company, from_account, to_account, company_currency, from_currency, to_currency
+):
 	source = source or {}
 	name = clean_text(source.get("name"))
 	if not name or clean_text(source.get("company")) != company:
@@ -197,21 +237,42 @@ def _invoice_row(source, chosen, company, from_account, to_account):
 		return None
 	if clean_text(source.get("account")) != from_account:
 		return None
+	invoice_currency = clean_text(source.get("currency")).upper()
+	previous = clean_text(source.get("party_account_currency")).upper()
+	action = MOVE
+	destination = to_account
+	account_currency = to_currency or previous
+	reason = ""
+	if from_currency and to_currency and from_currency != to_currency:
+		if _currency_change_allowed(invoice_currency, from_currency, to_currency, company_currency):
+			account_currency = to_currency
+		else:
+			action = STAY
+			destination = from_account
+			account_currency = previous or from_currency
+			shown = invoice_currency or "no currency"
+			reason = (
+				f"{name} is in {shown}. The accounts are in {from_currency} and {to_currency}. "
+				"A currency change stays between the invoice currency and the company currency."
+			)
 	return {
 		"name": name,
 		"doctype": chosen["doctype"],
 		"account_field": chosen["account_field"],
 		"party": clean_text(source.get("party")),
-		"currency": clean_text(source.get("currency")).upper(),
+		"currency": invoice_currency,
 		"posting_date": clean_text(source.get("posting_date")),
 		"outstanding_amount": _show(_money(source.get("outstanding_amount"))),
+		"conversion_rate": _show(_money(source.get("conversion_rate"), 9)),
 		"from_account": from_account,
-		"to_account": to_account,
-		"account_currency": clean_text(source.get("party_account_currency")).upper(),
+		"to_account": destination,
+		"account": destination if action == MOVE else from_account,
+		"account_currency": account_currency,
+		"previous_account_currency": previous,
 		"is_return": 1 if int(source.get("is_return") or 0) else 0,
 		"return_against": clean_text(source.get("return_against")),
-		"action": MOVE,
-		"reason": "",
+		"action": action,
+		"reason": reason,
 		"chain": None,
 	}
 
@@ -236,7 +297,17 @@ def _context_invoice(source, chosen, company):
 	}
 
 
-def _payment_row(source, company, invoices, from_account, to_account, doctype):
+def _payment_row(
+	source,
+	company,
+	invoices,
+	from_account,
+	to_account,
+	doctype,
+	company_currency,
+	from_currency,
+	to_currency,
+):
 	source = source or {}
 	name = clean_text(source.get("name"))
 	if not name or clean_text(source.get("company")) != company:
@@ -254,17 +325,29 @@ def _payment_row(source, company, invoices, from_account, to_account, doctype):
 	for reference in source.get("references") or []:
 		if _allocated(reference) and _invoice_action(reference, invoices, doctype) in (MOVE, HELD):
 			touches = True
-		built, problem = _reference_row(reference, invoices, doctype, from_account, to_account, party_account)
+		built, problem = _reference_row(
+			reference,
+			invoices,
+			doctype,
+			from_account,
+			to_account,
+			party_account,
+			party_currency or from_currency,
+			company_currency,
+		)
 		if problem and not reason:
 			reason = problem
 		if built is not None:
 			references.append(built)
 	if not touches:
 		return None
+	currency_change = any(row.get("restate") for row in references)
 	if not reason and any(row["kind"] == "other" for row in references):
 		targets = {row["account"] for row in references if row["kind"] == "invoice" and row.get("account")}
 		if len(targets) > 1:
 			reason = "This payment allocates another document, so it cannot be split across accounts."
+		elif currency_change:
+			reason = "This payment allocates another document, so its currency cannot change."
 	if reason:
 		return _held_payment(
 			source, name, payment_type, references, reason, bank_account, bank_amount, party_field
@@ -283,7 +366,7 @@ def _payment_row(source, company, invoices, from_account, to_account, doctype):
 			bank_amount,
 			party_field,
 		)
-	if len(targets) > 1:
+	if len(targets) > 1 or (unallocated > 0 and currency_change):
 		if source.get("has_taxes") or source.get("has_deductions"):
 			return _held_payment(
 				source,
@@ -298,15 +381,32 @@ def _payment_row(source, company, invoices, from_account, to_account, doctype):
 		mode = MULTI
 		new_account = to_account if to_account in targets else sorted(targets)[0]
 		advance_account = party_account if unallocated > 0 and party_account != new_account else ""
+		if currency_change and unallocated > 0:
+			advance_account = party_account
 		rewrite = 0
+		header = {}
 	else:
 		mode = SINGLE
+		if currency_change and (source.get("has_taxes") or source.get("has_deductions")):
+			return _held_payment(
+				source,
+				name,
+				payment_type,
+				references,
+				"Changing the account currency on a payment with taxes or deductions would change the tax.",
+				bank_account,
+				bank_amount,
+				party_field,
+			)
 		new_account = to_account if to_account in targets else party_account
 		advance_account = ""
 		rewrite = 1 if party_account != new_account else 0
 		for reference in references:
 			if reference["kind"] == "other":
 				reference["account"] = new_account
+		header = {}
+		if currency_change:
+			header = _currency_header(source, payment_type, references, company_currency)
 	row = _payment_shell(source, name, payment_type, references, MOVE, "")
 	row.update(
 		{
@@ -320,12 +420,22 @@ def _payment_row(source, company, invoices, from_account, to_account, doctype):
 			"party_account_field": party_field,
 			"party_currency_field": currency_field,
 			"rewrite_party": rewrite,
+			"restate": 1 if currency_change else 0,
+			"party_amount": 0,
+			"party_exchange_rate": 1,
+			"base_party_amount": 0,
+			"party_amount_field": "",
+			"party_rate_field": "",
+			"previous_party_currency": party_currency,
 		}
 	)
+	row.update(header)
 	return row
 
 
-def _reference_row(reference, invoices, doctype, from_account, to_account, party_account):
+def _reference_row(
+	reference, invoices, doctype, from_account, to_account, party_account, source_currency, company_currency
+):
 	reference = reference or {}
 	allocated = _allocated(reference)
 	ref_doctype = clean_text(reference.get("reference_doctype")) or doctype
@@ -359,10 +469,18 @@ def _reference_row(reference, invoices, doctype, from_account, to_account, party
 		return None, ""
 	if invoice.get("action") == MOVE:
 		account = to_account
-	elif invoice.get("action") == HELD:
+	elif invoice.get("action") in (HELD, STAY):
 		account = from_account
 	else:
 		account = clean_text(invoice.get("account"))
+	destination = clean_text(invoice.get("account_currency")).upper()
+	if invoice.get("action") == MOVE and source_currency and destination and source_currency != destination:
+		return (
+			_restated_reference(
+				reference, invoice, allocated, company_currency, source_currency, doctype, row_name
+			),
+			"",
+		)
 	return (
 		{
 			"row_name": row_name,
@@ -371,13 +489,17 @@ def _reference_row(reference, invoices, doctype, from_account, to_account, party
 			"kind": "invoice",
 			"qualifying": 1 if invoice.get("action") in (MOVE, HELD) else 0,
 			"account": account,
+			"account_currency": destination,
 			"allocated_amount": _show(allocated),
+			"restate": 0,
 		},
 		"",
 	)
 
 
-def _journal_row(source, company, invoices, from_account, to_account, doctype):
+def _journal_row(
+	source, company, invoices, from_account, to_account, doctype, company_currency, from_currency, to_currency
+):
 	source = source or {}
 	name = clean_text(source.get("name"))
 	if not name or clean_text(source.get("company")) != company:
@@ -388,7 +510,9 @@ def _journal_row(source, company, invoices, from_account, to_account, doctype):
 	reason = ""
 	touches = False
 	for line in source.get("lines") or []:
-		built, problem, touched = _journal_line(line, invoices, doctype, from_account, to_account)
+		built, problem, touched = _journal_line(
+			line, invoices, doctype, from_account, to_account, company_currency, from_currency, to_currency
+		)
 		if touched:
 			touches = True
 		if problem and not reason:
@@ -410,7 +534,9 @@ def _journal_row(source, company, invoices, from_account, to_account, doctype):
 	}
 
 
-def _journal_line(line, invoices, doctype, from_account, to_account):
+def _journal_line(
+	line, invoices, doctype, from_account, to_account, company_currency, from_currency, to_currency
+):
 	line = line or {}
 	ref_name = clean_text(line.get("reference_name"))
 	ref_type = clean_text(line.get("reference_type"))
@@ -434,6 +560,12 @@ def _journal_line(line, invoices, doctype, from_account, to_account):
 	if account == from_account:
 		built["action"] = "move"
 		built["account"] = to_account
+		if from_currency and to_currency and from_currency != to_currency:
+			problem = _restate_journal_line(built, line, invoice, to_currency, company_currency)
+			if problem:
+				built["action"] = "keep"
+				built["account"] = account
+				return built, problem, True
 		return built, "", True
 	if account == to_account:
 		return built, "", True
@@ -580,6 +712,194 @@ def _chains(invoices, payments, journals):
 			chains.append(bucket)
 	chains.sort(key=lambda row: (row["invoices"][:1], row["payments"][:1], row["journals"][:1]))
 	return chains
+
+
+def _currency_change_allowed(invoice_currency, from_currency, to_currency, company_currency) -> bool:
+	"""A currency change is the invoice currency on one side and the company currency on the other."""
+	if not invoice_currency or not company_currency:
+		return False
+	allowed = {invoice_currency, company_currency}
+	return from_currency in allowed and to_currency in allowed
+
+
+def _restated_reference(reference, invoice, allocated, company_currency, source_currency, doctype, row_name):
+	invoice_currency = clean_text(invoice.get("currency")).upper()
+	invoice_amount = _invoice_allocation(reference, invoice, allocated, company_currency, source_currency)
+	account_currency = clean_text(invoice.get("account_currency")).upper()
+	account_amount = _account_amount(
+		invoice_amount,
+		invoice_currency,
+		account_currency,
+		invoice.get("conversion_rate"),
+		company_currency,
+	)
+	payment_rate = _company_rate(
+		allocated,
+		invoice_amount,
+		invoice_currency,
+		source_currency,
+		reference.get("exchange_rate"),
+		invoice.get("conversion_rate"),
+		company_currency,
+	)
+	return {
+		"row_name": row_name,
+		"reference_doctype": doctype,
+		"reference_name": invoice["name"],
+		"kind": "invoice",
+		"qualifying": 1,
+		"account": invoice["to_account"],
+		"account_currency": account_currency,
+		"invoice_currency": invoice_currency,
+		"invoice_amount": _show(invoice_amount),
+		"allocated_amount": _show(account_amount),
+		"exchange_rate": _show(payment_rate),
+		"payment_rate": _show(payment_rate),
+		"restate": 1,
+	}
+
+
+def _currency_header(source, payment_type, references, company_currency):
+	"""One exchange rate keeps the company-currency party amount equal to the submitted base."""
+	currency = references[0]["account_currency"]
+	party_amount = _money(
+		sum(
+			(_money(row["allocated_amount"]) for row in references if row.get("kind") == "invoice"),
+			Decimal(0),
+		)
+	)
+	base = _party_base(source, payment_type)
+	if not base:
+		base = _money(
+			sum(
+				(
+					_money(row.get("invoice_amount"))
+					* (
+						_money(row.get("payment_rate") or row.get("exchange_rate"), 9)
+						if row.get("invoice_currency") != company_currency
+						else Decimal(1)
+					)
+					for row in references
+					if row.get("restate")
+				),
+				Decimal(0),
+			)
+		)
+	if currency == company_currency or not party_amount:
+		rate = Decimal(1)
+	else:
+		rate = _money(base / party_amount, 9) or Decimal(1)
+	shown = _show(rate)
+	for row in references:
+		if row.get("restate"):
+			row["exchange_rate"] = shown
+			row["payment_rate"] = shown
+	amount_field, rate_field = _amount_fields(payment_type)
+	return {
+		"party_account_currency": currency,
+		"party_amount": _show(party_amount),
+		"party_exchange_rate": shown,
+		"base_party_amount": _show(base if currency != company_currency else party_amount),
+		"party_amount_field": amount_field,
+		"party_rate_field": rate_field,
+		"restate": 1,
+	}
+
+
+def _restate_journal_line(built, line, invoice, to_currency, company_currency):
+	debit = _money(line.get("debit"))
+	credit = _money(line.get("credit"))
+	if to_currency == company_currency:
+		rate = Decimal(1)
+	else:
+		rate = _money(invoice.get("conversion_rate"), 9)
+		if not rate:
+			return f"{invoice['name']} has no conversion rate, so the journal amount cannot change currency."
+	built["restate"] = 1
+	built["account_currency"] = to_currency
+	built["exchange_rate"] = _show(rate)
+	built["debit_in_account_currency"] = _show(_money(debit / rate))
+	built["credit_in_account_currency"] = _show(_money(credit / rate))
+	return ""
+
+
+def _invoice_allocation(reference, invoice, allocated, company_currency, source_currency):
+	hero = _stored_allocation(reference.get("hero_allocated_invoice_amount"))
+	if hero is not None:
+		return hero
+	invoice_currency = clean_text(invoice.get("currency")).upper()
+	account_currency = clean_text(source_currency).upper()
+	if account_currency and account_currency == invoice_currency:
+		return allocated
+	conversion = _money(invoice.get("conversion_rate"), 9)
+	exchange = _money(reference.get("exchange_rate"), 9)
+	if account_currency == company_currency and invoice_currency and invoice_currency != company_currency:
+		rate = conversion or exchange
+	else:
+		rate = exchange or conversion
+	if rate:
+		return _money(allocated / rate)
+	return allocated
+
+
+def _company_rate(
+	allocated,
+	invoice_amount,
+	invoice_currency,
+	source_currency,
+	exchange_rate,
+	conversion_rate,
+	company_currency,
+):
+	"""Company currency for one unit of the invoice currency.
+
+	A company-currency account stores the allocation in company currency, so the
+	rate is that amount divided by the invoice amount. A foreign account already
+	stores the invoice amount, and dividing it by itself would book 1.
+	"""
+	if not invoice_currency or invoice_currency == company_currency or not invoice_amount:
+		return Decimal(1)
+	if source_currency == company_currency:
+		return _money(allocated / invoice_amount, 9) or Decimal(1)
+	booked = _money(exchange_rate, 9)
+	conversion = _money(conversion_rate, 9)
+	if booked and booked != 1:
+		return booked
+	return conversion or booked or Decimal(1)
+
+
+def _stored_allocation(value):
+	if value in (None, "", False):
+		return None
+	if isinstance(value, str) and not value.strip():
+		return None
+	amount = _money(value)
+	if amount == 0:
+		return None
+	return amount
+
+
+def _account_amount(invoice_amount, invoice_currency, account_currency, conversion_rate, company_currency):
+	if account_currency == invoice_currency:
+		return invoice_amount
+	if account_currency == company_currency:
+		rate = (
+			Decimal(1) if invoice_currency == company_currency else _money(conversion_rate, 9) or Decimal(1)
+		)
+		return _money(invoice_amount * rate)
+	return invoice_amount
+
+
+def _amount_fields(payment_type):
+	if payment_type == "Pay":
+		return "received_amount", "target_exchange_rate"
+	return "paid_amount", "source_exchange_rate"
+
+
+def _party_base(source, payment_type):
+	if payment_type == "Pay":
+		return _money(source.get("base_received_amount"))
+	return _money(source.get("base_paid_amount"))
 
 
 def _party_fields(source, payment_type):
