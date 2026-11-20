@@ -11,6 +11,7 @@ from frappehero.finance_desk.cheque_logic import (
 	mode_uses_cheque_leaf,
 	plan_payment_cheque,
 	preview_cheque,
+	reconcile_issued_cheques,
 	summarize_book,
 	summarize_numbers,
 )
@@ -262,6 +263,196 @@ def _cheque_party(doc) -> str:
 	return named[:140]
 
 
+def backfill_internal_transfers() -> dict:
+	"""Mark Cheque Leaf numbers already stored on an Internal Transfer.
+
+	Called from migrate. A number that is not on the paying bank's leaf is left
+	alone, and a number held by another payment is left with that payment.
+	"""
+	empty = {"numbers": 0, "payments": 0, "skipped": []}
+	if not _backfill_ready():
+		return empty
+	payments = _issued_transfers()
+	if not payments:
+		return empty
+	_fill_transfer_banks(payments)
+	banks = sorted({row["bank_account"] for row in payments if row.get("bank_account")})
+	leaves = _leaves_for_banks(banks)
+	numbers = _numbers_for([leaf["name"] for leaf in leaves])
+	plan = reconcile_issued_cheques(payments, leaves, numbers)
+	written = _apply_issued(plan)
+	_report_backfill(written)
+	return written
+
+
+def _backfill_ready() -> bool:
+	if not frappe.db.table_exists("Payment Entry"):
+		return False
+	if not frappe.db.table_exists("Hero Cheque Leaf") or not frappe.db.table_exists("Hero Cheque Number"):
+		return False
+	meta = frappe.get_meta("Payment Entry")
+	return meta.has_field("hero_cheque_leaf") and meta.has_field("hero_cheque_number") and meta.has_field("hero_cheque_state")
+
+
+def _issued_transfers() -> list[dict]:
+	meta = frappe.get_meta("Payment Entry")
+	fields = [
+		"name",
+		"docstatus",
+		"reference_no",
+		"paid_from",
+		"paid_to",
+		"company",
+		"posting_date",
+		"party",
+		"party_name",
+		"hero_cheque_leaf",
+		"hero_cheque_number",
+		"hero_cheque_state",
+	]
+	if meta.has_field("paid_from_bank_account"):
+		fields.append("paid_from_bank_account")
+	rows = frappe.get_all(
+		"Payment Entry",
+		filters={"payment_type": "Internal Transfer", "docstatus": ["in", [0, 1, 2]]},
+		fields=fields,
+		limit_page_length=0,
+	)
+	payments = []
+	for row in rows:
+		number = clean_text(row.reference_no) or clean_text(row.hero_cheque_number)
+		if not number:
+			continue
+		bank = clean_text(getattr(row, "paid_from_bank_account", "") or "")
+		payments.append(
+			{
+				"name": row.name,
+				"payment_type": "Internal Transfer",
+				"docstatus": row.docstatus,
+				"reference_no": row.reference_no,
+				"hero_cheque_number": row.hero_cheque_number,
+				"hero_cheque_leaf": row.hero_cheque_leaf,
+				"hero_cheque_state": row.hero_cheque_state,
+				"bank_account": bank,
+				"paid_from": row.paid_from,
+				"company": row.company,
+				"posting_date": row.posting_date,
+				"party": clean_text(row.party_name or row.party or row.paid_to)[:140],
+			}
+		)
+	return payments
+
+
+def _fill_transfer_banks(payments):
+	pending = [row for row in payments if not row.get("bank_account") and clean_text(row.get("paid_from"))]
+	if not pending or not frappe.db.table_exists("Bank Account"):
+		return
+	accounts = sorted({clean_text(row.get("paid_from")) for row in pending})
+	found = frappe.get_all(
+		"Bank Account",
+		filters={"account": ["in", accounts], "disabled": 0},
+		fields=["name", "account", "company"],
+		limit_page_length=0,
+	)
+	by_account = {}
+	for row in found:
+		by_account.setdefault(clean_text(row.account), []).append(row)
+	for payment in pending:
+		matches = by_account.get(clean_text(payment.get("paid_from"))) or []
+		company = clean_text(payment.get("company"))
+		chosen = next((row for row in matches if not company or clean_text(row.company) == company), None)
+		if chosen:
+			payment["bank_account"] = chosen.name
+
+
+def _leaves_for_banks(banks) -> list[dict]:
+	if not banks or not frappe.db.table_exists("Hero Cheque Leaf"):
+		return []
+	rows = frappe.get_all(
+		"Hero Cheque Leaf",
+		filters={"bank_account": ["in", list(banks)]},
+		fields=["name", "bank_account", "company", "status", "is_default"],
+		limit_page_length=0,
+	)
+	return [
+		{
+			"name": row.name,
+			"bank_account": row.bank_account,
+			"company": row.company,
+			"status": row.status,
+			"is_default": row.is_default,
+		}
+		for row in rows
+	]
+
+
+def _apply_issued(plan) -> dict:
+	blocked = set()
+	written_numbers = 0
+	for change in plan.get("numbers") or []:
+		if not change.get("name") or not frappe.db.exists("Hero Cheque Number", change["name"]):
+			blocked.add(change.get("payment_entry"))
+			continue
+		current = frappe.db.get_value(
+			"Hero Cheque Number",
+			change["name"],
+			["status", "payment_entry"],
+			as_dict=True,
+		)
+		owner = clean_text(current.payment_entry if current else "")
+		status = clean_text(current.status if current else "")
+		if owner and owner != change["payment_entry"] and status in ("Assigned", "Used", "Cancelled"):
+			blocked.add(change["payment_entry"])
+			continue
+		frappe.db.set_value(
+			"Hero Cheque Number",
+			change["name"],
+			{
+				"status": change["status"],
+				"payment_entry": change["payment_entry"],
+				"party": change.get("party") or "",
+				"posting_date": change.get("posting_date") or None,
+			},
+			update_modified=False,
+		)
+		written_numbers += 1
+	written_payments = 0
+	for payment in plan.get("payments") or []:
+		if payment["name"] in blocked or not frappe.db.exists("Payment Entry", payment["name"]):
+			continue
+		frappe.db.set_value(
+			"Payment Entry",
+			payment["name"],
+			{
+				"hero_cheque_leaf": payment["hero_cheque_leaf"],
+				"hero_cheque_number": payment["hero_cheque_number"],
+				"hero_cheque_state": payment["hero_cheque_state"],
+			},
+			update_modified=False,
+		)
+		written_payments += 1
+	skipped = list(plan.get("skipped") or [])
+	return {"numbers": written_numbers, "payments": written_payments, "skipped": skipped}
+
+
+def _report_backfill(written):
+	skipped = written.get("skipped") or []
+	if not written.get("numbers") and not written.get("payments") and not skipped:
+		return
+	lines = [
+		"Cheque Leaf: updated {numbers} number(s) from {payments} Internal Transfer(s). Skipped {count}.".format(
+			numbers=written.get("numbers") or 0,
+			payments=written.get("payments") or 0,
+			count=len(skipped),
+		)
+	]
+	for row in skipped[:20]:
+		lines.append("- {payment}: {reason}".format(**row))
+	if len(skipped) > 20:
+		lines.append("- and {0} more".format(len(skipped) - 20))
+	print("\n".join(lines))
+
+
 def _mode_uses_cheque(mode_of_payment) -> bool:
 	mode = clean_text(mode_of_payment)
 	if not mode or not frappe.db.exists("Mode of Payment", mode):
@@ -314,7 +505,7 @@ def _numbers_for(leaf_names) -> dict:
 	rows = frappe.get_all(
 		"Hero Cheque Number",
 		filters={"parent": ["in", names], "parenttype": "Hero Cheque Leaf"},
-		fields=["name", "parent", "cheque_number", "status", "payment_entry", "idx"],
+		fields=["name", "parent", "cheque_number", "status", "payment_entry", "party", "posting_date", "idx"],
 		order_by="idx asc",
 		limit_page_length=0,
 	)
@@ -326,6 +517,8 @@ def _numbers_for(leaf_names) -> dict:
 				"cheque_number": row.cheque_number,
 				"status": row.status,
 				"payment_entry": row.payment_entry,
+				"party": row.party,
+				"posting_date": row.posting_date,
 			}
 		)
 	return grouped

@@ -21,6 +21,9 @@ def after_install():
 def after_migrate():
 	ensure_custom_fields()
 	remove_retired_doctypes()
+	from frappehero.finance_desk.cheque import backfill_internal_transfers
+
+	backfill_internal_transfers()
 	remove_retired_pages()
 
 
