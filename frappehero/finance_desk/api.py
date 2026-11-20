@@ -23,6 +23,7 @@ from frappehero.finance_desk.logic import (
 	parse_trial_balance,
 	summarize_dimensions,
 )
+from frappehero.finance_desk.party_reclass import apply_reclass, preview_reclass
 from frappehero.finance_desk.receivable_repair import (
 	apply_defaults,
 	apply_repair,
@@ -573,6 +574,29 @@ def preview_receivable_defaults(
 ) -> dict:
 	_finance()
 	return preview_defaults(company, wrong_account, usd_account, other_account)
+
+
+@frappe.whitelist()
+def preview_party_reclass(
+	company: str | None = None,
+	side: str | None = None,
+	from_account: str | None = None,
+	to_account: str | None = None,
+) -> dict:
+	_finance()
+	return preview_reclass(company, side, from_account, to_account)
+
+
+@frappe.whitelist()
+def apply_party_reclass(
+	company: str | None = None,
+	side: str | None = None,
+	from_account: str | None = None,
+	to_account: str | None = None,
+	signature: str | dict | None = None,
+) -> dict:
+	_finance()
+	return apply_reclass(company, side, from_account, to_account, signature)
 
 
 @frappe.whitelist()
