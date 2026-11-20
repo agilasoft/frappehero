@@ -7,23 +7,23 @@ if (!frappehero.call) {
 	frappehero.call = (method, args) => frappe.call({ method, args: args || {} }).then((response) => response.message);
 }
 
-frappe.pages["party-reclass"].on_page_load = function (wrapper) {
+frappe.pages["ar-ap-account"].on_page_load = function (wrapper) {
 	const page = frappe.ui.make_app_page({
 		parent: wrapper,
-		title: __("Party Reclass"),
+		title: __("AR/AP Account"),
 		single_column: true,
 	});
-	wrapper.partyReclass = new frappehero.PartyReclass(page);
+	wrapper.arApAccount = new frappehero.ArApAccount(page);
 };
 
-frappehero.PartyReclass = class PartyReclass {
+frappehero.ArApAccount = class ArApAccount {
 	constructor(page) {
 		this.page = page;
 		this.preview = null;
 		this.page.main.addClass("fh-page");
 		this.page.main.html(`
 			<div class="fh-app">
-				<p class="fh-muted">${__("Move submitted sales or purchase invoices from one receivable or payable to another. The new account can use a different currency. Receipts and journals that post those invoices move with them. The company-currency amount and the bank amount stay as submitted. Nothing is cancelled.")}</p>
+				<p class="fh-muted">${__("Change the receivable or payable GL account on submitted sales or purchase invoices. Receipts and journals that post those invoices change with them. The new GL account can use a different currency. The company-currency amount and the bank amount stay as submitted. Nothing is cancelled.")}</p>
 				<div class="fh-filters">
 					<div class="fh-company"></div>
 					<div class="fh-side"></div>
@@ -77,8 +77,8 @@ frappehero.PartyReclass = class PartyReclass {
 				},
 				render_input: true,
 			});
-		this.fromControl = account(this.page.main.find(".fh-from"), "from_account", "Account to leave");
-		this.toControl = account(this.page.main.find(".fh-to"), "to_account", "Account to use");
+		this.fromControl = account(this.page.main.find(".fh-from"), "from_account", "Current GL account");
+		this.toControl = account(this.page.main.find(".fh-to"), "to_account", "New GL account");
 		const root = this.page.main.find(".fh-app").get(0);
 		root.addEventListener("click", (event) => this.onClick(event));
 		root.addEventListener("change", () => this.clearPreview());
@@ -114,10 +114,10 @@ frappehero.PartyReclass = class PartyReclass {
 	async load() {
 		const args = this.args();
 		if (!args.company || !args.side || !args.from_account || !args.to_account) {
-			frappe.msgprint(__("Choose the company, the account type, and both accounts."));
+			frappe.msgprint(__("Choose the company, Receivable or Payable, and both GL accounts."));
 			return;
 		}
-		this.preview = await frappehero.call("frappehero.finance_desk.api.preview_party_reclass", args);
+		this.preview = await frappehero.call("frappehero.finance_desk.api.preview_ar_ap_account", args);
 		this.render();
 	}
 
@@ -125,9 +125,9 @@ frappehero.PartyReclass = class PartyReclass {
 		const state = this.preview || {};
 		const counts = state.counts || {};
 		this.page.main.find(".fh-stats").html(`
-			<div class="fh-stat"><b>${counts.move_invoices || 0}</b><span>${__("Invoices to move")}</span></div>
-			<div class="fh-stat"><b>${counts.move_payments || 0}</b><span>${__("Payments to move")}</span></div>
-			<div class="fh-stat"><b>${counts.move_journals || 0}</b><span>${__("Journals to move")}</span></div>
+			<div class="fh-stat"><b>${counts.move_invoices || 0}</b><span>${__("Invoices to change")}</span></div>
+			<div class="fh-stat"><b>${counts.move_payments || 0}</b><span>${__("Payments to change")}</span></div>
+			<div class="fh-stat"><b>${counts.move_journals || 0}</b><span>${__("Journals to change")}</span></div>
 			<div class="fh-stat"><b>${counts.stay_invoices || 0}</b><span>${__("Invoices staying")}</span></div>
 			<div class="fh-stat"><b>${counts.held_invoices || 0}</b><span>${__("Invoices held")}</span></div>
 		`);
@@ -136,34 +136,35 @@ frappehero.PartyReclass = class PartyReclass {
 			notes.push(`<p>${frappehero.esc(state.blocked)}</p>`);
 		}
 		if (state.multi_ready === false) {
-			notes.push(`<p>${__("Migrate Frappe Hero before a payment can use more than one account.")}</p>`);
+			notes.push(`<p>${__("Migrate Frappe Hero before changing a payment that uses more than one GL account.")}</p>`);
 		}
 		notes.push(
 			`<p class="fh-muted">${__(
-				"An invoice in another currency stays on the current account. When the currency changes, an unallocated advance stays on the current account. Customer and supplier default accounts stay as they are. Cancelled documents stay as they are."
+				"An invoice in another currency stays on its current GL account. When the currency changes, an unallocated advance stays on its current GL account. Customer and supplier records stay as they are. Cancelled documents stay as they are."
 			)}</p>`
 		);
 		this.page.main.find(".fh-note").html(notes.join(""));
 		const invoiceLabel = state.doctype === "Purchase Invoice" ? __("Purchase invoices") : __("Sales invoices");
+		const partyLabel = state.doctype === "Purchase Invoice" ? __("Supplier") : __("Customer");
 		this.page.main.find(".fh-invoices").html(this.table(
 			invoiceLabel,
-			[__("Invoice"), __("Party"), __("Outstanding"), __("To"), __("Status")],
+			[__("Invoice"), partyLabel, __("Outstanding"), __("New GL account"), __("Status")],
 			(state.invoices || []).map((row) => [
 				row.name,
 				row.party,
 				row.outstanding_amount,
 				row.action === "move" ? row.to_account : row.reason,
-				row.action,
+				this.statusLabel(row.action),
 			])
 		));
 		this.page.main.find(".fh-payments").html(this.table(
 			__("Payments"),
-			[__("Payment"), __("Bank amount"), __("Account"), __("Status")],
+			[__("Payment"), __("Bank amount"), __("GL account"), __("Status")],
 			(state.payments || []).map((row) => [
 				row.name,
 				row.bank_amount,
 				row.action === "move" ? row.party_account || row.advance_account : row.reason,
-				row.action === "move" ? row.mode : row.action,
+				this.statusLabel(row.action),
 			])
 		));
 		this.page.main.find(".fh-journals").html(this.table(
@@ -172,7 +173,7 @@ frappehero.PartyReclass = class PartyReclass {
 			(state.journals || []).map((row) => [
 				row.name,
 				row.debit_total,
-				row.action === "move" ? row.action : row.reason,
+				row.action === "move" ? this.statusLabel(row.action) : row.reason,
 			])
 		));
 		const canApply =
@@ -181,6 +182,19 @@ frappehero.PartyReclass = class PartyReclass {
 			(counts.move_invoices || counts.move_payments || counts.move_journals) &&
 			state.multi_ready !== false;
 		this.page.main.find('[data-action="apply"]').prop("disabled", !canApply);
+	}
+
+	statusLabel(action) {
+		if (action === "move") {
+			return __("Change");
+		}
+		if (action === "stay") {
+			return __("Stays");
+		}
+		if (action === "held") {
+			return __("Held");
+		}
+		return action || "";
 	}
 
 	table(title, headings, rows) {
@@ -197,7 +211,7 @@ frappehero.PartyReclass = class PartyReclass {
 		}
 		const confirmed = await new Promise((resolve) => {
 			frappe.confirm(
-				__("Update these submitted invoices, payments, and journals in place? Nothing is cancelled."),
+				__("Change the GL account on these submitted invoices, receipts, and journals? Nothing is cancelled."),
 				() => resolve(true),
 				() => resolve(false)
 			);
@@ -205,12 +219,12 @@ frappehero.PartyReclass = class PartyReclass {
 		if (!confirmed) {
 			return;
 		}
-		const result = await frappehero.call("frappehero.finance_desk.api.apply_party_reclass", {
+		const result = await frappehero.call("frappehero.finance_desk.api.apply_ar_ap_account", {
 			...this.args(),
 			signature: this.preview.signature,
 		});
 		const failed = (result.chains || []).filter((row) => row.status !== "applied");
-		const summary = __("Moved {0} invoices, {1} payments, and {2} journals.", [
+		const summary = __("Changed the GL account on {0} invoices, {1} payments, and {2} journals.", [
 			result.applied_invoices || 0,
 			result.applied_payments || 0,
 			result.applied_journals || 0,

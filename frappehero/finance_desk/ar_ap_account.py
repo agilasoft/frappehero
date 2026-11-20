@@ -1,25 +1,25 @@
 # Copyright (c) 2026, Agilasoft and contributors
 # For license information, please see license.txt
 
-"""Move submitted invoices onto another receivable or payable without cancelling them.
+"""Change the receivable or payable GL account on submitted invoices.
 
-The account is written onto the submitted invoice, onto the receipts and
-journals that post it, and then each voucher's ledger is rebuilt. The new
-account can use another currency. The company-currency amount and the bank
-amount stay as submitted.
+The new GL account is written onto the invoice, onto the receipts and journals
+that post it, and then each voucher's ledger is rebuilt. The new account can
+use another currency. The company-currency amount and the bank amount stay as
+submitted. Nothing is cancelled.
 """
 
 import frappe
 from frappe import _
 from frappe.utils import flt
 
-from frappehero.finance_desk.party_reclass_logic import (
+from frappehero.finance_desk.ar_ap_account_logic import (
 	MOVE,
 	MULTI,
 	SINGLE,
-	PartyReclassError,
+	ArApAccountError,
 	check_accounts,
-	plan_reclass,
+	plan_accounts,
 	selection_matches,
 	side_choice,
 )
@@ -57,7 +57,7 @@ _PAYMENT_FIELDS = [
 ]
 
 
-def preview_reclass(company, side, from_account, to_account) -> dict:
+def preview_accounts(company, side, from_account, to_account) -> dict:
 	company, side_name, from_account, to_account, from_currency, to_currency, company_currency = _checked(
 		company, side, from_account, to_account
 	)
@@ -85,7 +85,7 @@ def preview_reclass(company, side, from_account, to_account) -> dict:
 	}
 
 
-def apply_reclass(company, side, from_account, to_account, expected) -> dict:
+def apply_accounts(company, side, from_account, to_account, expected) -> dict:
 	company, side_name, from_account, to_account, from_currency, to_currency, company_currency = _checked(
 		company, side, from_account, to_account
 	)
@@ -98,12 +98,12 @@ def apply_reclass(company, side, from_account, to_account, expected) -> dict:
 		frappe.throw(_("Preview this selection again before applying it."), title=_("Preview again"))
 	if any(row["mode"] == MULTI and row["action"] == MOVE for row in plan["payments"]) and not _multi_ready():
 		frappe.throw(
-			_("Migrate Frappe Hero before reclassing a payment that uses more than one account."),
+			_("Migrate Frappe Hero before changing a payment that uses more than one GL account."),
 			title=_("Migrate first"),
 		)
 	results = []
 	for index, chain in enumerate(plan["chains"]):
-		savepoint = f"party_reclass_{index}"
+		savepoint = f"ar_ap_account_{index}"
 		frappe.db.savepoint(savepoint)
 		try:
 			_apply_chain(plan, chain, to_currency)
@@ -116,7 +116,7 @@ def apply_reclass(company, side, from_account, to_account, expected) -> dict:
 			results.append(_chain_result(chain, "applied", ""))
 		except Exception as exc:
 			_rollback(savepoint)
-			frappe.log_error(title="Party reclass", message=frappe.get_traceback())
+			frappe.log_error(title="AR/AP account", message=frappe.get_traceback())
 			results.append(
 				_chain_result(chain, "rolled_back", clean_text(exc) or _("This chain could not be rebuilt."))
 			)
@@ -144,7 +144,7 @@ def _plan(company, side_name, from_account, to_account, from_currency, to_curren
 	if extra:
 		invoices.extend(_load_named_invoices(chosen, extra))
 	journals = _load_journals(company, chosen["doctype"], [row["name"] for row in invoices])
-	return plan_reclass(
+	return plan_accounts(
 		company,
 		side_name,
 		from_account,
@@ -164,14 +164,14 @@ def _checked(company, side, from_account, to_account):
 	to_account = clean_text(to_account)
 	try:
 		chosen = side_choice(side)
-	except PartyReclassError as exc:
+	except ArApAccountError as exc:
 		frappe.throw(str(exc), title=_("Check the accounts"))
 	if not company or not frappe.db.exists("Company", company):
 		frappe.throw(_("Choose a company."))
 	accounts = _account_map([from_account, to_account])
 	try:
 		currencies = check_accounts(company, chosen["name"], from_account, to_account, accounts)
-	except PartyReclassError as exc:
+	except ArApAccountError as exc:
 		frappe.throw(str(exc), title=_("Check the accounts"))
 	company_currency = clean_text(frappe.db.get_value("Company", company, "default_currency")).upper()
 	from_currency = currencies["from_currency"] or company_currency
@@ -382,7 +382,7 @@ def _block_reason(company, plan) -> str:
 		):
 			messages.append(
 				_(
-					"Period Closing Voucher {0} closes the books through {1}. Cancel that voucher before this reclass, then create it again."
+					"Period Closing Voucher {0} closes the books through {1}. Cancel that voucher before this GL account change, then create it again."
 				).format(latest[0].name, latest[0].period_end_date)
 			)
 	if frappe.db.exists("DocType", "Accounts Settings") and frappe.get_meta("Accounts Settings").has_field(

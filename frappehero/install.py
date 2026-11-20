@@ -21,6 +21,7 @@ def after_install():
 def after_migrate():
 	ensure_custom_fields()
 	remove_retired_doctypes()
+	remove_retired_pages()
 
 
 def remove_retired_doctypes():
@@ -28,6 +29,12 @@ def remove_retired_doctypes():
 	for name in ("Hero Multi Currency Payment", "Hero Multi Currency Allocation"):
 		if frappe.db.exists("DocType", name):
 			frappe.delete_doc("DocType", name, force=1, ignore_permissions=True)
+
+
+def remove_retired_pages():
+	"""The GL account fix replaced the page that was named Party Reclass."""
+	if frappe.db.exists("Page", "party-reclass"):
+		frappe.delete_doc("Page", "party-reclass", force=1, ignore_permissions=True)
 
 
 def ensure_custom_fields():

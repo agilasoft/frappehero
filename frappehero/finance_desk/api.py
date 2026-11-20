@@ -4,6 +4,7 @@
 import frappe
 from frappe import _
 
+from frappehero.finance_desk.ar_ap_account import apply_accounts, preview_accounts
 from frappehero.finance_desk.bsp import (
 	add_days,
 	clean_lookback,
@@ -23,7 +24,6 @@ from frappehero.finance_desk.logic import (
 	parse_trial_balance,
 	summarize_dimensions,
 )
-from frappehero.finance_desk.party_reclass import apply_reclass, preview_reclass
 from frappehero.finance_desk.receivable_repair import (
 	apply_defaults,
 	apply_repair,
@@ -38,7 +38,9 @@ def _finance():
 
 
 @frappe.whitelist()
-def get_dimension_coverage(company: str, dimension: str, status: str | None = None, search: str | None = None) -> dict:
+def get_dimension_coverage(
+	company: str, dimension: str, status: str | None = None, search: str | None = None
+) -> dict:
 	_finance()
 	company = clean_text(company)
 	dimension = clean_text(dimension)
@@ -104,7 +106,9 @@ def get_dimension_coverage(company: str, dimension: str, status: str | None = No
 
 
 @frappe.whitelist()
-def set_dimension_default(company: str, dimension: str, account: str, default_value: str, apply_on_new_entries=0) -> dict:
+def set_dimension_default(
+	company: str, dimension: str, account: str, default_value: str, apply_on_new_entries=0
+) -> dict:
 	_finance()
 	company = clean_text(company)
 	dimension = clean_text(dimension)
@@ -142,7 +146,8 @@ def get_tax_state(company: str, search: str | None = None) -> dict:
 	if not company:
 		frappe.throw(_("Company is required."))
 	allowed = set(
-		frappe.get_all("Item Tax Template", filters={"company": company}, pluck="name", limit_page_length=0) or []
+		frappe.get_all("Item Tax Template", filters={"company": company}, pluck="name", limit_page_length=0)
+		or []
 	)
 	groups = frappe.get_all(
 		"Item Group",
@@ -175,7 +180,9 @@ def get_tax_state(company: str, search: str | None = None) -> dict:
 	return {
 		"company": company,
 		"templates": sorted(allowed),
-		"groups": filter_named_rows(mapped_groups, search, ("name", "template", "parent_item_group", "status")),
+		"groups": filter_named_rows(
+			mapped_groups, search, ("name", "template", "parent_item_group", "status")
+		),
 		"items": filter_named_rows(missing_items, search, ("name", "item_name", "item_group")),
 		"unmapped_groups": sum(1 for row in mapped_groups if row["status"] == "unmapped"),
 		"mapped_groups": sum(1 for row in mapped_groups if row["status"] == "mapped"),
@@ -226,7 +233,9 @@ def get_opening_batch(name: str) -> dict:
 
 
 @frappe.whitelist()
-def create_opening_batch(batch_name: str, company: str, posting_date: str, purpose: str = "Opening Entry") -> dict:
+def create_opening_batch(
+	batch_name: str, company: str, posting_date: str, purpose: str = "Opening Entry"
+) -> dict:
 	_finance()
 	doc = frappe.new_doc("Hero Opening Batch")
 	doc.batch_name = batch_name
@@ -577,18 +586,18 @@ def preview_receivable_defaults(
 
 
 @frappe.whitelist()
-def preview_party_reclass(
+def preview_ar_ap_account(
 	company: str | None = None,
 	side: str | None = None,
 	from_account: str | None = None,
 	to_account: str | None = None,
 ) -> dict:
 	_finance()
-	return preview_reclass(company, side, from_account, to_account)
+	return preview_accounts(company, side, from_account, to_account)
 
 
 @frappe.whitelist()
-def apply_party_reclass(
+def apply_ar_ap_account(
 	company: str | None = None,
 	side: str | None = None,
 	from_account: str | None = None,
@@ -596,7 +605,7 @@ def apply_party_reclass(
 	signature: str | dict | None = None,
 ) -> dict:
 	_finance()
-	return apply_reclass(company, side, from_account, to_account, signature)
+	return apply_accounts(company, side, from_account, to_account, signature)
 
 
 @frappe.whitelist()

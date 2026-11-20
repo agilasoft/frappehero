@@ -4,9 +4,9 @@
  "modified": "2026-11-20 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "Finance Desk",
- "name": "party-reclass",
+ "name": "ar-ap-account",
  "owner": "Administrator",
- "page_name": "party-reclass",
+ "page_name": "ar-ap-account",
  "roles": [
   {
    "role": "System Manager"
@@ -17,5 +17,5 @@
  ],
  "standard": "Yes",
  "system_page": 0,
- "title": "Party Reclass"
+ "title": "AR/AP Account"
 }

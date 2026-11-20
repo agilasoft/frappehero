@@ -3,10 +3,10 @@
 
 import unittest
 
-from frappehero.finance_desk.party_reclass_logic import (
-	PartyReclassError,
+from frappehero.finance_desk.ar_ap_account_logic import (
+	ArApAccountError,
 	check_accounts,
-	plan_reclass,
+	plan_accounts,
 	selection_matches,
 	side_choice,
 )
@@ -119,7 +119,7 @@ class TestAccountChoice(unittest.TestCase):
 		purchase = side_choice("payable")
 		self.assertEqual(purchase["doctype"], "Purchase Invoice")
 		self.assertEqual(purchase["account_field"], "credit_to")
-		with self.assertRaises(PartyReclassError):
+		with self.assertRaises(ArApAccountError):
 			side_choice("Bank")
 
 	def test_accounts_must_match_the_side_and_can_change_currency(self):
@@ -130,15 +130,15 @@ class TestAccountChoice(unittest.TestCase):
 		)
 		changed = check_accounts(COMPANY, "receivable", OLD_AR, USD_AR, _accounts())
 		self.assertEqual(changed, {"from_currency": "PHP", "to_currency": "USD"})
-		with self.assertRaises(PartyReclassError):
+		with self.assertRaises(ArApAccountError):
 			check_accounts(COMPANY, "receivable", OLD_AR, OLD_AP, _accounts())
-		with self.assertRaises(PartyReclassError):
+		with self.assertRaises(ArApAccountError):
 			check_accounts(COMPANY, "receivable", OLD_AR, OLD_AR, _accounts())
 
 
 class TestReclassPlan(unittest.TestCase):
 	def test_receipt_keeps_its_bank_amount_and_allocation(self):
-		plan = plan_reclass(
+		plan = plan_accounts(
 			COMPANY,
 			"receivable",
 			OLD_AR,
@@ -162,7 +162,7 @@ class TestReclassPlan(unittest.TestCase):
 		self.assertEqual(plan["chains"], [{"invoices": ["SI-1"], "payments": ["PE-1"], "journals": []}])
 
 	def test_unallocated_advance_moves_with_the_same_receipt(self):
-		plan = plan_reclass(
+		plan = plan_accounts(
 			COMPANY,
 			"receivable",
 			OLD_AR,
@@ -178,7 +178,7 @@ class TestReclassPlan(unittest.TestCase):
 		self.assertEqual(payment["bank_amount"], 100)
 
 	def test_supplier_payment_uses_the_payable(self):
-		plan = plan_reclass(
+		plan = plan_accounts(
 			COMPANY,
 			"payable",
 			OLD_AP,
@@ -207,7 +207,7 @@ class TestReclassPlan(unittest.TestCase):
 		self.assertEqual(payment["bank_account"], BANK)
 
 	def test_credit_note_stays_with_its_invoice(self):
-		plan = plan_reclass(
+		plan = plan_accounts(
 			COMPANY,
 			"receivable",
 			OLD_AR,
@@ -222,7 +222,7 @@ class TestReclassPlan(unittest.TestCase):
 		self.assertEqual(plan["chains"], [{"invoices": ["CN-1", "SI-1"], "payments": [], "journals": []}])
 
 	def test_journal_line_moves_and_the_other_line_stays(self):
-		plan = plan_reclass(
+		plan = plan_accounts(
 			COMPANY,
 			"receivable",
 			OLD_AR,
@@ -255,7 +255,7 @@ class TestReclassPlan(unittest.TestCase):
 		self.assertEqual(plan["chains"][0]["journals"], ["JE-1"])
 
 	def test_journal_on_another_account_holds_the_invoice(self):
-		plan = plan_reclass(
+		plan = plan_accounts(
 			COMPANY,
 			"receivable",
 			OLD_AR,
@@ -270,7 +270,7 @@ class TestReclassPlan(unittest.TestCase):
 		self.assertIn(OTHER_AR, plan["journals"][0]["reason"])
 
 	def test_payment_on_another_account_holds_the_invoice(self):
-		plan = plan_reclass(
+		plan = plan_accounts(
 			COMPANY,
 			"receivable",
 			OLD_AR,
@@ -283,7 +283,7 @@ class TestReclassPlan(unittest.TestCase):
 		self.assertIn(OTHER_AR, plan["payments"][0]["reason"])
 
 	def test_split_receipt_stays_one_document(self):
-		plan = plan_reclass(
+		plan = plan_accounts(
 			COMPANY,
 			"receivable",
 			OLD_AR,
@@ -300,7 +300,7 @@ class TestReclassPlan(unittest.TestCase):
 		self.assertEqual(payment["references"][0]["allocated_amount"], 50)
 
 	def test_taxes_hold_a_split_receipt(self):
-		plan = plan_reclass(
+		plan = plan_accounts(
 			COMPANY,
 			"receivable",
 			OLD_AR,
@@ -313,7 +313,7 @@ class TestReclassPlan(unittest.TestCase):
 		self.assertTrue(all(row["action"] == "held" for row in plan["invoices"]))
 
 	def test_taxes_on_one_account_still_move(self):
-		plan = plan_reclass(
+		plan = plan_accounts(
 			COMPANY,
 			"receivable",
 			OLD_AR,
@@ -326,7 +326,7 @@ class TestReclassPlan(unittest.TestCase):
 		self.assertEqual(plan["payments"][0]["mode"], "single")
 
 	def test_another_document_on_one_account_follows_the_receipt(self):
-		plan = plan_reclass(
+		plan = plan_accounts(
 			COMPANY,
 			"receivable",
 			OLD_AR,
@@ -341,7 +341,7 @@ class TestReclassPlan(unittest.TestCase):
 		self.assertEqual(other["account"], NEW_AR)
 
 	def test_cancelled_and_other_accounts_are_left_out(self):
-		plan = plan_reclass(
+		plan = plan_accounts(
 			COMPANY,
 			"receivable",
 			OLD_AR,
@@ -357,7 +357,7 @@ class TestReclassPlan(unittest.TestCase):
 		self.assertEqual([row["name"] for row in plan["invoices"]], ["SI-1"])
 
 	def test_two_invoices_are_separate_chains(self):
-		plan = plan_reclass(
+		plan = plan_accounts(
 			COMPANY,
 			"receivable",
 			OLD_AR,
@@ -372,7 +372,7 @@ class TestReclassPlan(unittest.TestCase):
 
 
 def _currency_plan(invoices, payments, journals, from_account=OLD_AR, to_account=USD_AR):
-	return plan_reclass(
+	return plan_accounts(
 		COMPANY,
 		"receivable",
 		from_account,
