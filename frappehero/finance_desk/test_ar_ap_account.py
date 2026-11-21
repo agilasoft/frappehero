@@ -254,6 +254,167 @@ class TestReclassPlan(unittest.TestCase):
 		self.assertEqual(journal["lines"][1]["account"], EXPENSE)
 		self.assertEqual(plan["chains"][0]["journals"], ["JE-1"])
 
+	def test_exchange_journal_keeps_the_gain_line_that_names_the_invoice(self):
+		plan = plan_accounts(
+			COMPANY,
+			"receivable",
+			OLD_AR,
+			NEW_AR,
+			[_invoice("SI-1")],
+			[_payment("PE-1", [_reference("SI-1")])],
+			[
+				_journal(
+					"JE-1",
+					[
+						_line(OLD_AR, "SI-1", debit=20),
+						{
+							"row_name": "je-gain",
+							"account": EXPENSE,
+							"reference_type": "Sales Invoice",
+							"reference_name": "SI-1",
+							"debit": 0,
+							"credit": 20,
+						},
+					],
+					voucher_type="Exchange Gain Or Loss",
+				)
+			],
+		)
+		journal = plan["journals"][0]
+		payment = plan["payments"][0]
+		self.assertEqual(journal["action"], "move")
+		self.assertEqual(journal["lines"][0]["account"], NEW_AR)
+		self.assertEqual(journal["lines"][1]["action"], "keep")
+		self.assertEqual(journal["lines"][1]["account"], EXPENSE)
+		self.assertEqual(plan["invoices"][0]["action"], "move")
+		self.assertEqual(payment["action"], "move")
+		self.assertEqual(payment["keep_exchange_journal"], 1)
+		self.assertEqual(plan["signature"]["journals"], ["JE-1"])
+		self.assertEqual(plan["chains"], [{"invoices": ["SI-1"], "payments": ["PE-1"], "journals": ["JE-1"]}])
+
+	def test_exchange_journal_moves_the_line_that_names_the_receipt(self):
+		plan = plan_accounts(
+			COMPANY,
+			"receivable",
+			OLD_AR,
+			NEW_AR,
+			[_invoice("SI-1")],
+			[_payment("PE-1", [_reference("SI-1")])],
+			[
+				_journal(
+					"JE-1",
+					[
+						{
+							"row_name": "je-party",
+							"account": OLD_AR,
+							"reference_type": "Payment Entry",
+							"reference_name": "PE-1",
+							"debit": 15,
+							"credit": 0,
+						},
+						{
+							"row_name": "je-gain",
+							"account": EXPENSE,
+							"reference_type": "Sales Invoice",
+							"reference_name": "SI-1",
+							"debit": 0,
+							"credit": 15,
+						},
+					],
+					voucher_type="Exchange Gain Or Loss",
+				)
+			],
+		)
+		journal = plan["journals"][0]
+		party = next(row for row in journal["lines"] if row["row_name"] == "je-party")
+		gain = next(row for row in journal["lines"] if row["row_name"] == "je-gain")
+		self.assertEqual(journal["action"], "move")
+		self.assertEqual(party["action"], "move")
+		self.assertEqual(party["account"], NEW_AR)
+		self.assertEqual(gain["action"], "keep")
+		self.assertEqual(gain["account"], EXPENSE)
+		self.assertEqual(plan["invoices"][0]["action"], "move")
+		self.assertEqual(plan["payments"][0]["keep_exchange_journal"], 1)
+		self.assertEqual(plan["chains"][0]["journals"], ["JE-1"])
+		self.assertEqual(plan["chains"][0]["payments"], ["PE-1"])
+
+	def test_receipt_on_the_current_account_moves_when_its_invoice_is_already_elsewhere(self):
+		plan = plan_accounts(
+			COMPANY,
+			"receivable",
+			OLD_AR,
+			NEW_AR,
+			[_invoice("SI-1", account=OTHER_AR)],
+			[_payment("PE-1", [_reference("SI-1", 80)])],
+			[
+				_journal(
+					"JE-1",
+					[
+						{
+							"row_name": "je-party",
+							"account": OLD_AR,
+							"reference_type": "Payment Entry",
+							"reference_name": "PE-1",
+							"debit": 10,
+							"credit": 0,
+							"debit_in_account_currency": 0,
+							"exchange_rate": 0,
+						},
+						{
+							"row_name": "je-gain",
+							"account": EXPENSE,
+							"reference_type": "Payment Entry",
+							"reference_name": "PE-1",
+							"debit": 0,
+							"credit": 10,
+						},
+					],
+					voucher_type="Exchange Gain Or Loss",
+				)
+			],
+		)
+		self.assertEqual(plan["invoices"], [])
+		payment = plan["payments"][0]
+		self.assertEqual(payment["action"], "move")
+		self.assertEqual(payment["party_account"], NEW_AR)
+		self.assertEqual(payment["references"][0]["account"], NEW_AR)
+		self.assertEqual(payment["references"][0]["allocated_amount"], 80)
+		journal = plan["journals"][0]
+		self.assertEqual(journal["action"], "move")
+		self.assertEqual(journal["lines"][0]["account"], NEW_AR)
+		self.assertNotIn("restate", journal["lines"][0])
+		self.assertEqual(journal["lines"][1]["account"], EXPENSE)
+		self.assertEqual(payment["keep_exchange_journal"], 1)
+		self.assertEqual(plan["signature"], {"invoices": [], "payments": ["PE-1"], "journals": ["JE-1"]})
+		self.assertEqual(plan["chains"], [{"invoices": [], "payments": ["PE-1"], "journals": ["JE-1"]}])
+
+	def test_receipt_on_two_other_accounts_moves_as_one(self):
+		plan = plan_accounts(
+			COMPANY,
+			"receivable",
+			OLD_AR,
+			NEW_AR,
+			[_invoice("SI-1", account=OTHER_AR), _invoice("SI-2", account=USD_AR)],
+			[
+				_payment(
+					"PE-1",
+					[_reference("SI-1", 40), _reference("SI-2", 40)],
+					unallocated_amount=20,
+				)
+			],
+			[],
+		)
+		self.assertEqual(plan["invoices"], [])
+		payment = plan["payments"][0]
+		self.assertEqual(payment["action"], "move")
+		self.assertEqual(payment["mode"], "single")
+		self.assertEqual(payment["party_account"], NEW_AR)
+		self.assertEqual(payment["unallocated_amount"], 20)
+		accounts = {row["reference_name"]: row["account"] for row in payment["references"]}
+		self.assertEqual(accounts, {"SI-1": NEW_AR, "SI-2": NEW_AR})
+		self.assertEqual(payment["references"][0]["allocated_amount"], 40)
+		self.assertEqual(plan["signature"], {"invoices": [], "payments": ["PE-1"], "journals": []})
+
 	def test_journal_on_another_account_holds_the_invoice(self):
 		plan = plan_accounts(
 			COMPANY,
@@ -532,6 +693,157 @@ class TestCurrencyChange(unittest.TestCase):
 		self.assertEqual(payment["party_exchange_rate"], 1)
 		self.assertEqual(payment["references"][0]["allocated_amount"], 5600)
 		self.assertEqual(payment["bank_amount"], 5600)
+
+	def test_exchange_journal_on_the_company_currency_keeps_the_company_amount(self):
+		plan = _currency_plan(
+			[
+				_invoice(
+					"SI-1",
+					account=USD_AR,
+					currency="USD",
+					conversion_rate=56,
+					party_account_currency="USD",
+				)
+			],
+			[_payment("PE-1", [_reference("SI-1", 100)], paid_from=USD_AR, paid_from_account_currency="USD")],
+			[
+				_journal(
+					"JE-1",
+					[
+						{
+							"row_name": "je-party",
+							"account": USD_AR,
+							"reference_type": "Sales Invoice",
+							"reference_name": "SI-1",
+							"debit": 560,
+							"credit": 0,
+							"debit_in_account_currency": 0,
+							"credit_in_account_currency": 0,
+							"exchange_rate": 0,
+						},
+						{
+							"row_name": "je-gain",
+							"account": EXPENSE,
+							"reference_type": "Sales Invoice",
+							"reference_name": "SI-1",
+							"debit": 0,
+							"credit": 560,
+						},
+					],
+					voucher_type="Exchange Gain Or Loss",
+				)
+			],
+			from_account=USD_AR,
+			to_account=OLD_AR,
+		)
+		moved = next(row for row in plan["journals"][0]["lines"] if row["row_name"] == "je-party")
+		self.assertEqual(plan["journals"][0]["action"], "move")
+		self.assertEqual(plan["journals"][0]["debit_total"], 560)
+		self.assertEqual(moved["account"], OLD_AR)
+		self.assertEqual(moved["account_currency"], "PHP")
+		self.assertEqual(moved["exchange_rate"], 1)
+		self.assertEqual(moved["debit_in_account_currency"], 560)
+		self.assertEqual(moved["credit_in_account_currency"], 0)
+		self.assertEqual(plan["invoices"][0]["action"], "move")
+		self.assertEqual(plan["payments"][0]["action"], "move")
+
+	def test_exchange_line_uses_the_invoice_rate_on_the_new_currency(self):
+		plan = _currency_plan(
+			[_invoice("SI-1", currency="USD", conversion_rate=56)],
+			[],
+			[
+				_journal(
+					"JE-1",
+					[
+						{
+							"row_name": "je-party",
+							"account": OLD_AR,
+							"reference_type": "Sales Invoice",
+							"reference_name": "SI-1",
+							"debit": 5600,
+							"credit": 0,
+							"debit_in_account_currency": 5600,
+							"credit_in_account_currency": 0,
+							"exchange_rate": 1,
+						},
+						{
+							"row_name": "je-gain",
+							"account": EXPENSE,
+							"reference_type": "Sales Invoice",
+							"reference_name": "SI-1",
+							"debit": 0,
+							"credit": 5600,
+						},
+					],
+					voucher_type="Exchange Rate Revaluation",
+				)
+			],
+		)
+		moved = next(row for row in plan["journals"][0]["lines"] if row["row_name"] == "je-party")
+		self.assertEqual(plan["journals"][0]["action"], "move")
+		self.assertEqual(moved["account"], USD_AR)
+		self.assertEqual(moved["account_currency"], "USD")
+		self.assertEqual(moved["exchange_rate"], 56)
+		self.assertEqual(moved["debit_in_account_currency"], 100)
+		self.assertEqual(plan["journals"][0]["debit_total"], 5600)
+
+	def test_exchange_revaluation_between_two_foreign_currencies_stays(self):
+		plan = plan_accounts(
+			COMPANY,
+			"receivable",
+			USD_AR,
+			"11213 - Trade Receivables EUR - ATN",
+			[_invoice("SI-1", account=OLD_AR, currency="USD", conversion_rate=56)],
+			[],
+			[
+				_journal(
+					"JE-1",
+					[
+						{
+							"row_name": "je-party",
+							"account": USD_AR,
+							"reference_type": "Sales Invoice",
+							"reference_name": "SI-1",
+							"debit": 5600,
+							"credit": 0,
+							"debit_in_account_currency": 100,
+							"credit_in_account_currency": 0,
+							"exchange_rate": 56,
+						}
+					],
+					voucher_type="Exchange Rate Revaluation",
+				)
+			],
+			company_currency="PHP",
+			from_currency="USD",
+			to_currency="EUR",
+		)
+		self.assertEqual(plan["journals"][0]["action"], "held")
+		self.assertEqual(plan["journals"][0]["lines"][0]["account"], USD_AR)
+		self.assertEqual(plan["journals"][0]["lines"][0]["action"], "keep")
+		self.assertNotIn("account_currency", plan["journals"][0]["lines"][0])
+		self.assertEqual(plan["signature"], {"invoices": [], "payments": [], "journals": []})
+
+	def test_receipt_stays_when_its_invoice_is_elsewhere_and_the_currency_would_change(self):
+		plan = _currency_plan(
+			[_invoice("SI-1", account=OLD_AR, currency="USD", conversion_rate=56)],
+			[
+				_payment(
+					"PE-1",
+					[_reference("SI-1", 100)],
+					paid_from=USD_AR,
+					paid_from_account_currency="USD",
+					paid_amount=100,
+					received_amount=5600,
+				)
+			],
+			[],
+			from_account=USD_AR,
+			to_account=OLD_AR,
+		)
+		self.assertEqual(plan["payments"][0]["action"], "held")
+		self.assertIn(USD_AR, plan["payments"][0]["reason"])
+		self.assertEqual(plan["signature"], {"invoices": [], "payments": [], "journals": []})
 
 	def test_journal_keeps_the_company_debit_and_restates_the_account_amount(self):
 		plan = _currency_plan(

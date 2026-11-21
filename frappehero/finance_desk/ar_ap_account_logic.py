@@ -6,8 +6,10 @@
 Pure functions. The desk page calls these, and the tests run without a site.
 The new account can use another currency. A change is between the invoice
 currency and the company currency, and the company-currency amount stays as
-submitted. Receipts and journals that post the invoice change with it. Nothing
-here cancels a document.
+submitted. Receipts and journals that post the invoice change with it. An
+exchange gain or loss journal changes the line on the current account, and
+the gain or loss account stays. A receipt that still posts to the current
+account changes too. Nothing here cancels a document.
 """
 
 from decimal import ROUND_HALF_UP, Decimal
@@ -23,6 +25,10 @@ HELD = "held"
 STAY = "stay"
 SINGLE = "single"
 MULTI = "multi"
+PAYMENT_ENTRY = "Payment Entry"
+EXCHANGE_GAIN_OR_LOSS = "Exchange Gain Or Loss"
+EXCHANGE_RATE_REVALUATION = "Exchange Rate Revaluation"
+EXCHANGE_VOUCHERS = {EXCHANGE_GAIN_OR_LOSS, EXCHANGE_RATE_REVALUATION}
 _SIDES = {
 	RECEIVABLE: {
 		"doctype": SALES_INVOICE,
@@ -165,6 +171,7 @@ def plan_accounts(
 		row["chain"] = chain_of.get(("payment", row["name"]))
 	for row in journal_rows:
 		row["chain"] = chain_of.get(("journal", row["name"]))
+	_mark_exchange_journals(payment_rows, journal_rows, chosen["doctype"])
 	return {
 		"company": company,
 		"side": chosen["name"],
@@ -322,6 +329,7 @@ def _payment_row(
 		reason = "Payment type must be Receive or Pay."
 	party_account, party_currency, party_field, currency_field = _party_fields(source, payment_type)
 	bank_account, bank_amount = _bank(source, payment_type)
+	posts_current = party_account == from_account
 	for reference in source.get("references") or []:
 		if _allocated(reference) and _invoice_action(reference, invoices, doctype) in (MOVE, HELD):
 			touches = True
@@ -339,9 +347,23 @@ def _payment_row(
 			reason = problem
 		if built is not None:
 			references.append(built)
+	if posts_current:
+		touches = True
 	if not touches:
 		return None
 	currency_change = any(row.get("restate") for row in references)
+	if (
+		not reason
+		and posts_current
+		and from_currency
+		and to_currency
+		and from_currency != to_currency
+		and not currency_change
+	):
+		reason = (
+			f"This receipt posts to {from_account} in {from_currency}. Its invoice is not moving, "
+			f"so the currency cannot change to {to_currency}."
+		)
 	if not reason and any(row["kind"] == "other" for row in references):
 		targets = {row["account"] for row in references if row["kind"] == "invoice" and row.get("account")}
 		if len(targets) > 1:
@@ -355,6 +377,7 @@ def _payment_row(
 
 	targets = {row["account"] for row in references if row["kind"] == "invoice" and row.get("account")}
 	unallocated = _money(source.get("unallocated_amount"))
+	settles_moving_invoice = any(row.get("kind") == "invoice" and row.get("qualifying") for row in references)
 	if party_account not in {from_account, to_account}:
 		return _held_payment(
 			source,
@@ -366,7 +389,8 @@ def _payment_row(
 			bank_amount,
 			party_field,
 		)
-	if len(targets) > 1 or (unallocated > 0 and currency_change):
+	ledger_follows_party = posts_current and not settles_moving_invoice
+	if not ledger_follows_party and (len(targets) > 1 or (unallocated > 0 and currency_change)):
 		if source.get("has_taxes") or source.get("has_deductions"):
 			return _held_payment(
 				source,
@@ -398,11 +422,18 @@ def _payment_row(
 				bank_amount,
 				party_field,
 			)
-		new_account = to_account if to_account in targets else party_account
+		new_account = to_account if posts_current or to_account in targets else party_account
 		advance_account = ""
 		rewrite = 1 if party_account != new_account else 0
 		for reference in references:
 			if reference["kind"] == "other":
+				reference["account"] = new_account
+			elif (
+				posts_current
+				and reference["kind"] == "invoice"
+				and not reference.get("restate")
+				and reference.get("account") != new_account
+			):
 				reference["account"] = new_account
 		header = {}
 		if currency_change:
@@ -509,9 +540,18 @@ def _journal_row(
 	lines = []
 	reason = ""
 	touches = False
+	voucher_type = clean_text(source.get("voucher_type"))
 	for line in source.get("lines") or []:
 		built, problem, touched = _journal_line(
-			line, invoices, doctype, from_account, to_account, company_currency, from_currency, to_currency
+			line,
+			invoices,
+			doctype,
+			from_account,
+			to_account,
+			company_currency,
+			from_currency,
+			to_currency,
+			voucher_type,
 		)
 		if touched:
 			touches = True
@@ -525,7 +565,7 @@ def _journal_row(
 	return {
 		"name": name,
 		"posting_date": clean_text(source.get("posting_date")),
-		"voucher_type": clean_text(source.get("voucher_type")),
+		"voucher_type": voucher_type,
 		"action": HELD if reason else MOVE,
 		"reason": reason,
 		"debit_total": _show(debit),
@@ -535,7 +575,15 @@ def _journal_row(
 
 
 def _journal_line(
-	line, invoices, doctype, from_account, to_account, company_currency, from_currency, to_currency
+	line,
+	invoices,
+	doctype,
+	from_account,
+	to_account,
+	company_currency,
+	from_currency,
+	to_currency,
+	voucher_type="",
 ):
 	line = line or {}
 	ref_name = clean_text(line.get("reference_name"))
@@ -549,10 +597,24 @@ def _journal_line(
 		"action": "keep",
 		"touches": 0,
 	}
-	if ref_type != doctype or ref_name not in invoices:
+	invoice = invoices.get(ref_name) if ref_type == doctype else None
+	if voucher_type in EXCHANGE_VOUCHERS and account == from_account:
+		if invoice and invoice.get("action") == STAY:
+			built["touches"] = 1
+			return (
+				built,
+				f"{ref_name} stays in its currency, so this exchange journal stays on {from_account}.",
+				True,
+			)
+		return _move_exchange_line(
+			built, line, invoice, to_account, from_currency, to_currency, company_currency
+		)
+	if voucher_type in EXCHANGE_VOUCHERS:
+		if invoice and invoice.get("action") in (MOVE, HELD):
+			built["touches"] = 1
+			return built, "", True
 		return built, "", False
-	invoice = invoices[ref_name]
-	if invoice.get("action") not in (MOVE, HELD):
+	if invoice is None or invoice.get("action") not in (MOVE, HELD):
 		return built, "", False
 	built["touches"] = 1
 	if invoice.get("action") != MOVE:
@@ -570,6 +632,58 @@ def _journal_line(
 	if account == to_account:
 		return built, "", True
 	return built, f"This journal posts {ref_name} to {account or 'no account'}, not {from_account}.", True
+
+
+def _move_exchange_line(built, line, invoice, to_account, from_currency, to_currency, company_currency):
+	"""Move the receivable or payable line. The gain or loss line stays and does not hold."""
+	built["action"] = "move"
+	built["account"] = to_account
+	built["touches"] = 1
+	if not (from_currency and to_currency and from_currency != to_currency):
+		return built, "", True
+	moving = invoice and invoice.get("action") == MOVE
+	allowed = moving and _currency_change_allowed(
+		invoice.get("currency"), from_currency, to_currency, company_currency
+	)
+	if allowed:
+		problem = _restate_moving_exchange_line(built, line, invoice, to_currency, company_currency)
+	elif to_currency == company_currency:
+		problem = _restate_exchange_line(built, line, to_currency, company_currency)
+	else:
+		problem = (
+			f"This exchange journal is in {from_currency}. Its invoice is not moving, "
+			f"so the currency cannot change to {to_currency}."
+		)
+	if problem:
+		built["action"] = "keep"
+		built["account"] = clean_text(line.get("account"))
+		built.pop("restate", None)
+		return built, problem, True
+	return built, "", True
+
+
+def _restate_moving_exchange_line(built, line, invoice, to_currency, company_currency):
+	"""Restate from the company amount. A zero foreign amount stays zero."""
+	account_debit = _money(line.get("debit_in_account_currency"))
+	account_credit = _money(line.get("credit_in_account_currency"))
+	if to_currency != company_currency and not account_debit and not account_credit:
+		built["restate"] = 1
+		built["account_currency"] = to_currency
+		built["exchange_rate"] = _show(_money(line.get("exchange_rate"), 9))
+		built["debit_in_account_currency"] = 0
+		built["credit_in_account_currency"] = 0
+		return ""
+	return _restate_journal_line(built, line, invoice, to_currency, company_currency)
+
+
+def _restate_exchange_line(built, line, to_currency, _company_currency):
+	"""A company-currency account carries the company amount at rate 1."""
+	built["restate"] = 1
+	built["account_currency"] = to_currency
+	built["exchange_rate"] = 1
+	built["debit_in_account_currency"] = _show(_money(line.get("debit")))
+	built["credit_in_account_currency"] = _show(_money(line.get("credit")))
+	return ""
 
 
 def _held_payment(source, name, payment_type, references, reason, bank_account, bank_amount, party_field):
@@ -620,6 +734,7 @@ def _hold_connected(invoices, payments, journals):
 				if line.get("touches") and line["reference_name"] in by_invoice
 			]
 			changed = _spread(journal, names, by_invoice, "journal") or changed
+		changed = _hold_exchange_pairs(payments, journals) or changed
 	for payment in payments:
 		if payment["action"] == HELD:
 			for reference in payment["references"]:
@@ -636,6 +751,8 @@ def _spread(voucher, names, by_invoice, kind) -> bool:
 	if voucher["action"] == HELD:
 		for invoice_name in names:
 			invoice = by_invoice[invoice_name]
+			if invoice["action"] == STAY:
+				continue
 			if invoice["action"] != HELD:
 				invoice["action"] = HELD
 				invoice["to_account"] = invoice["from_account"]
@@ -678,6 +795,7 @@ def _chains(invoices, payments, journals):
 			parent[root_right] = root_left
 
 	invoice_names = {row["name"] for row in invoices}
+	payment_names = {row["name"] for row in payments}
 	for row in invoices:
 		find(("invoice", row["name"]))
 		against = row.get("return_against")
@@ -695,8 +813,11 @@ def _chains(invoices, payments, journals):
 	for journal in journals:
 		find(("journal", journal["name"]))
 		for line in journal["lines"]:
-			if line.get("touches") and line["reference_name"] in invoice_names:
-				union(("journal", journal["name"]), ("invoice", line["reference_name"]))
+			reference_name = line.get("reference_name")
+			if line.get("reference_type") == PAYMENT_ENTRY and reference_name in payment_names:
+				union(("journal", journal["name"]), ("payment", reference_name))
+			elif line.get("touches") and reference_name in invoice_names:
+				union(("journal", journal["name"]), ("invoice", reference_name))
 	groups = {}
 	for node in list(parent):
 		root = find(node)
@@ -712,6 +833,66 @@ def _chains(invoices, payments, journals):
 			chains.append(bucket)
 	chains.sort(key=lambda row: (row["invoices"][:1], row["payments"][:1], row["journals"][:1]))
 	return chains
+
+
+def _hold_exchange_pairs(payments, journals) -> bool:
+	"""An exchange journal and the receipt it posts stay together when one of them is held."""
+	changed = False
+	by_payment = {row["name"]: row for row in payments}
+	for journal in journals:
+		if clean_text(journal.get("voucher_type")) not in EXCHANGE_VOUCHERS:
+			continue
+		names = [
+			line["reference_name"]
+			for line in journal["lines"]
+			if line.get("reference_type") == PAYMENT_ENTRY and line.get("reference_name") in by_payment
+		]
+		if journal["action"] == HELD:
+			for name in names:
+				payment = by_payment[name]
+				if payment["action"] != HELD:
+					payment["action"] = HELD
+					payment["mode"] = ""
+					payment["rewrite_party"] = 0
+					payment["reason"] = f"Held by {journal['name']}: {journal['reason']}"
+					changed = True
+			continue
+		for name in names:
+			payment = by_payment[name]
+			if payment["action"] == HELD:
+				journal["action"] = HELD
+				journal["reason"] = f"Held because {name} stays on the current account."
+				changed = True
+				break
+	return changed
+
+
+def _mark_exchange_journals(payments, journals, doctype):
+	"""Keep the existing exchange journal. Rebuilding the receipt must not book a second one."""
+	by_payment = {row["name"]: row for row in payments}
+	for journal in journals:
+		if journal["action"] != MOVE or clean_text(journal.get("voucher_type")) not in EXCHANGE_VOUCHERS:
+			continue
+		payment_names = set()
+		invoice_names = set()
+		for line in journal["lines"]:
+			if line.get("reference_type") == PAYMENT_ENTRY and line.get("reference_name"):
+				payment_names.add(line["reference_name"])
+			elif line.get("reference_type") == doctype and line.get("reference_name"):
+				invoice_names.add(line["reference_name"])
+		if not payment_names:
+			for payment in payments:
+				if payment["action"] != MOVE:
+					continue
+				if any(
+					row.get("kind") == "invoice" and row.get("reference_name") in invoice_names
+					for row in payment["references"]
+				):
+					payment_names.add(payment["name"])
+		for name in payment_names:
+			payment = by_payment.get(name)
+			if payment and payment["action"] == MOVE:
+				payment["keep_exchange_journal"] = 1
 
 
 def _currency_change_allowed(invoice_currency, from_currency, to_currency, company_currency) -> bool:
