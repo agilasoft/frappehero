@@ -538,7 +538,7 @@ def _write_restated_payment(payment):
 		payment["party_amount_field"]: payment["party_amount"],
 		payment["party_rate_field"]: payment["party_exchange_rate"],
 		"total_allocated_amount": allocated_total,
-		"base_total_allocated_amount": payment["base_party_amount"],
+		"base_total_allocated_amount": payment.get("base_allocated_amount", payment["base_party_amount"]),
 		"unallocated_amount": payment.get("unallocated_amount") or 0,
 	}
 	if payment["payment_type"] == "Pay":
