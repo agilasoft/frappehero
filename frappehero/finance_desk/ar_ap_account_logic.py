@@ -390,7 +390,12 @@ def _payment_row(
 			party_field,
 		)
 	ledger_follows_party = posts_current and not settles_moving_invoice
-	if not ledger_follows_party and (len(targets) > 1 or (unallocated > 0 and currency_change)):
+	keep_one_account = posts_current and (source.get("has_taxes") or source.get("has_deductions"))
+	if (
+		not ledger_follows_party
+		and not keep_one_account
+		and (len(targets) > 1 or (unallocated > 0 and currency_change))
+	):
 		if source.get("has_taxes") or source.get("has_deductions"):
 			return _held_payment(
 				source,
@@ -411,7 +416,7 @@ def _payment_row(
 		header = {}
 	else:
 		mode = SINGLE
-		if currency_change and (source.get("has_taxes") or source.get("has_deductions")):
+		if currency_change and (source.get("has_taxes") or source.get("has_deductions")) and not posts_current:
 			return _held_payment(
 				source,
 				name,
@@ -423,6 +428,20 @@ def _payment_row(
 				party_field,
 			)
 		new_account = to_account if posts_current or to_account in targets else party_account
+		if keep_one_account and from_currency and to_currency and from_currency != to_currency:
+			problem = _restate_open_references(
+				references,
+				invoices,
+				new_account,
+				to_currency,
+				company_currency,
+				party_currency or from_currency,
+			)
+			if problem:
+				return _held_payment(
+					source, name, payment_type, references, problem, bank_account, bank_amount, party_field
+				)
+			currency_change = True
 		advance_account = ""
 		rewrite = 1 if party_account != new_account else 0
 		for reference in references:
@@ -437,7 +456,15 @@ def _payment_row(
 				reference["account"] = new_account
 		header = {}
 		if currency_change:
-			header = _currency_header(source, payment_type, references, company_currency)
+			header = _currency_header(
+				source,
+				payment_type,
+				references,
+				company_currency,
+				unallocated if keep_one_account else Decimal(0),
+			)
+			if "unallocated_amount" in header:
+				unallocated = _money(header["unallocated_amount"])
 	row = _payment_shell(source, name, payment_type, references, MOVE, "")
 	row.update(
 		{
@@ -523,6 +550,8 @@ def _reference_row(
 			"account_currency": destination,
 			"allocated_amount": _show(allocated),
 			"restate": 0,
+			"source_allocated": _show(allocated),
+			"source_exchange_rate": _show(_money(reference.get("exchange_rate"), 9)),
 		},
 		"",
 	)
@@ -940,10 +969,10 @@ def _restated_reference(reference, invoice, allocated, company_currency, source_
 	}
 
 
-def _currency_header(source, payment_type, references, company_currency):
+def _currency_header(source, payment_type, references, company_currency, unallocated=Decimal(0)):
 	"""One exchange rate keeps the company-currency party amount equal to the submitted base."""
-	currency = references[0]["account_currency"]
-	party_amount = _money(
+	currency = references[0]["account_currency"] if references else company_currency
+	allocated = _money(
 		sum(
 			(_money(row["allocated_amount"]) for row in references if row.get("kind") == "invoice"),
 			Decimal(0),
@@ -952,39 +981,99 @@ def _currency_header(source, payment_type, references, company_currency):
 	base = _party_base(source, payment_type)
 	if not base:
 		base = _money(
+			sum((_row_company_amount(row, company_currency) for row in references if row.get("restate")), Decimal(0))
+		)
+	unallocated = _money(unallocated)
+	unallocated_new = Decimal(0)
+	base_allocated = base
+	if unallocated and base:
+		allocated_company = _money(
 			sum(
-				(
-					_money(row.get("invoice_amount"))
-					* (
-						_money(row.get("payment_rate") or row.get("exchange_rate"), 9)
-						if row.get("invoice_currency") != company_currency
-						else Decimal(1)
-					)
-					for row in references
-					if row.get("restate")
-				),
+				(_row_company_amount(row, company_currency) for row in references if row.get("kind") == "invoice"),
 				Decimal(0),
 			)
 		)
-	if currency == company_currency or not party_amount:
-		rate = Decimal(1)
+		leftover = _money(base - allocated_company)
+		base_allocated = allocated_company
+		if currency == company_currency:
+			unallocated_new = leftover
+			party_amount = _money(allocated + leftover)
+			rate = Decimal(1)
+		else:
+			rate = _money((references[0].get("payment_rate") or references[0].get("exchange_rate")), 9) or Decimal(1)
+			unallocated_new = _money(leftover / rate) if rate else leftover
+			party_amount = _money(allocated + unallocated_new)
+			if party_amount:
+				rate = _money(base / party_amount, 9) or rate
 	else:
-		rate = _money(base / party_amount, 9) or Decimal(1)
+		party_amount = allocated
+		if currency == company_currency or not party_amount:
+			rate = Decimal(1)
+		else:
+			rate = _money(base / party_amount, 9) or Decimal(1)
 	shown = _show(rate)
 	for row in references:
 		if row.get("restate"):
 			row["exchange_rate"] = shown
 			row["payment_rate"] = shown
 	amount_field, rate_field = _amount_fields(payment_type)
-	return {
+	header = {
 		"party_account_currency": currency,
 		"party_amount": _show(party_amount),
 		"party_exchange_rate": shown,
 		"base_party_amount": _show(base if currency != company_currency else party_amount),
+		"base_allocated_amount": _show(base_allocated if currency != company_currency else party_amount - unallocated_new),
 		"party_amount_field": amount_field,
 		"party_rate_field": rate_field,
 		"restate": 1,
 	}
+	if unallocated:
+		header["unallocated_amount"] = _show(unallocated_new)
+	return header
+
+
+def _row_company_amount(row, company_currency) -> Decimal:
+	if clean_text(row.get("account_currency")).upper() == company_currency:
+		return _money(row.get("allocated_amount"))
+	if clean_text(row.get("invoice_currency")).upper() == company_currency:
+		return _money(row.get("invoice_amount") or row.get("allocated_amount"))
+	rate = _money(row.get("payment_rate") or row.get("exchange_rate"), 9) or Decimal(1)
+	return _money(_money(row.get("invoice_amount") or row.get("allocated_amount")) * rate)
+
+
+def _restate_open_references(references, invoices, to_account, to_currency, company_currency, source_currency):
+	"""Put every remaining invoice row into the new account currency."""
+	for reference in references:
+		if reference.get("kind") != "invoice" or reference.get("restate"):
+			continue
+		invoice = invoices.get(reference.get("reference_name")) or {}
+		rate = _money(reference.get("source_exchange_rate") or invoice.get("conversion_rate"), 9)
+		amount = _money(reference.get("source_allocated", reference.get("allocated_amount")))
+		if source_currency == to_currency:
+			converted = amount
+		elif to_currency == company_currency and source_currency != company_currency:
+			if not rate:
+				return f"{reference['reference_name']} has no exchange rate, so the currency cannot change."
+			converted = _money(amount * rate)
+		elif source_currency == company_currency and to_currency != company_currency:
+			if not rate:
+				return f"{reference['reference_name']} has no exchange rate, so the currency cannot change."
+			converted = _money(amount / rate)
+		else:
+			shown = clean_text(invoice.get("currency")) or source_currency
+			return (
+				f"{reference['reference_name']} is in {shown}, so this receipt cannot change "
+				f"from {source_currency} to {to_currency}."
+			)
+		reference["account"] = to_account
+		reference["account_currency"] = to_currency
+		reference["allocated_amount"] = _show(converted)
+		reference["restate"] = 1
+		reference["exchange_rate"] = 1 if to_currency == company_currency else _show(rate)
+		reference["payment_rate"] = reference["exchange_rate"]
+		reference["invoice_currency"] = clean_text(invoice.get("currency")).upper() or to_currency
+		reference["invoice_amount"] = _show(amount if source_currency != company_currency else converted)
+	return ""
 
 
 def _restate_journal_line(built, line, invoice, to_currency, company_currency):
