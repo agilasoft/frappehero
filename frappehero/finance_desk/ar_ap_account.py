@@ -6,7 +6,9 @@
 The new GL account is written onto the invoice, onto the receipts and journals
 that post it, and then each voucher's ledger is rebuilt. The new account can
 use another currency. The company-currency amount and the bank amount stay as
-submitted. Nothing is cancelled.
+submitted. An exchange gain or loss journal changes the line on the current
+account. A receipt that still posts to the current account changes too.
+Nothing is cancelled.
 """
 
 import frappe
@@ -55,6 +57,7 @@ _PAYMENT_FIELDS = [
 	"unallocated_amount",
 	"posting_date",
 ]
+_EXCHANGE_VOUCHERS = ["Exchange Gain Or Loss", "Exchange Rate Revaluation"]
 
 
 def preview_accounts(company, side, from_account, to_account) -> dict:
@@ -133,6 +136,11 @@ def _plan(company, side_name, from_account, to_account, from_currency, to_curren
 	invoices = _load_invoices(company, chosen, from_account)
 	names = [row["name"] for row in invoices]
 	payments = _load_payments(company, chosen["doctype"], names)
+	seen_payments = {row["name"] for row in payments}
+	for payment in _load_payments_on_account(company, from_account):
+		if payment["name"] not in seen_payments:
+			payments.append(payment)
+			seen_payments.add(payment["name"])
 	known = set(names)
 	extra = []
 	for payment in payments:
@@ -144,6 +152,11 @@ def _plan(company, side_name, from_account, to_account, from_currency, to_curren
 	if extra:
 		invoices.extend(_load_named_invoices(chosen, extra))
 	journals = _load_journals(company, chosen["doctype"], [row["name"] for row in invoices])
+	seen_journals = {row["name"] for row in journals}
+	for journal in _load_exchange_journals(company, from_account, sorted(seen_payments)):
+		if journal["name"] not in seen_journals:
+			journals.append(journal)
+			seen_journals.add(journal["name"])
 	return plan_accounts(
 		company,
 		side_name,
@@ -227,19 +240,6 @@ def _shaped_invoice(row, chosen):
 def _load_payments(company, doctype, invoice_names):
 	if not invoice_names:
 		return []
-	reference_fields = [
-		"name",
-		"parent",
-		"reference_doctype",
-		"reference_name",
-		"allocated_amount",
-		"exchange_rate",
-	]
-	meta = frappe.get_meta("Payment Entry Reference")
-	if meta.has_field("account"):
-		reference_fields.append("account")
-	if meta.has_field("hero_allocated_invoice_amount"):
-		reference_fields.append("hero_allocated_invoice_amount")
 	links = frappe.get_all(
 		"Payment Entry Reference",
 		filters={
@@ -261,6 +261,46 @@ def _load_payments(company, doctype, invoice_names):
 	)
 	if not headers:
 		return []
+	return _payments_from_headers(headers)
+
+
+def _load_payments_on_account(company, from_account):
+	"""Receipts whose party account is still the current GL account."""
+	if not from_account:
+		return []
+	headers = []
+	seen = set()
+	for field in ("paid_from", "paid_to"):
+		rows = frappe.get_all(
+			"Payment Entry",
+			filters={"company": company, "docstatus": 1, field: from_account},
+			fields=_PAYMENT_FIELDS,
+			limit_page_length=0,
+		)
+		for row in rows:
+			if row.name in seen:
+				continue
+			headers.append(row)
+			seen.add(row.name)
+	return _payments_from_headers(headers)
+
+
+def _payments_from_headers(headers):
+	if not headers:
+		return []
+	reference_fields = [
+		"name",
+		"parent",
+		"reference_doctype",
+		"reference_name",
+		"allocated_amount",
+		"exchange_rate",
+	]
+	meta = frappe.get_meta("Payment Entry Reference")
+	if meta.has_field("account"):
+		reference_fields.append("account")
+	if meta.has_field("hero_allocated_invoice_amount"):
+		reference_fields.append("hero_allocated_invoice_amount")
 	names = [row.name for row in headers]
 	references = frappe.get_all(
 		"Payment Entry Reference",
@@ -324,6 +364,54 @@ def _load_journals(company, doctype, invoice_names):
 		fields=["name", "company", "docstatus", "posting_date", "voucher_type"],
 		limit_page_length=0,
 	)
+	return _journals_from_headers(headers)
+
+
+def _load_exchange_journals(company, from_account, payment_names):
+	"""Exchange journals that still post the current account or one of these receipts."""
+	if not frappe.db.table_exists("Journal Entry Account"):
+		return []
+	parents = set()
+	if from_account:
+		for row in frappe.get_all(
+			"Journal Entry Account",
+			filters={"parenttype": "Journal Entry", "account": from_account, "docstatus": 1},
+			fields=["parent"],
+			limit_page_length=0,
+		):
+			if row.parent:
+				parents.add(row.parent)
+	if payment_names:
+		for row in frappe.get_all(
+			"Journal Entry Account",
+			filters={
+				"parenttype": "Journal Entry",
+				"reference_type": "Payment Entry",
+				"reference_name": ["in", payment_names],
+				"docstatus": 1,
+			},
+			fields=["parent"],
+			limit_page_length=0,
+		):
+			if row.parent:
+				parents.add(row.parent)
+	if not parents:
+		return []
+	headers = frappe.get_all(
+		"Journal Entry",
+		filters={
+			"name": ["in", sorted(parents)],
+			"company": company,
+			"docstatus": 1,
+			"voucher_type": ["in", _EXCHANGE_VOUCHERS],
+		},
+		fields=["name", "company", "docstatus", "posting_date", "voucher_type"],
+		limit_page_length=0,
+	)
+	return _journals_from_headers(headers)
+
+
+def _journals_from_headers(headers):
 	if not headers:
 		return []
 	names = [row.name for row in headers]
@@ -417,7 +505,7 @@ def _apply_chain(plan, chain, currency):
 	for payment in payments:
 		_rebuild_payment(payment)
 	for journal in journals:
-		_rebuild("Journal Entry", journal["name"], from_repost=False)
+		_rebuild("Journal Entry", journal["name"], from_repost=False, voucher_type=journal.get("voucher_type"))
 
 
 def _write_payment(payment, currency):
@@ -557,10 +645,12 @@ def _write_journal(journal):
 		frappe.db.set_value("Journal Entry Account", line["row_name"], values, update_modified=True)
 
 
-def _rebuild(doctype, name, from_repost):
+def _rebuild(doctype, name, from_repost, voucher_type=""):
 	_clear_ledger(doctype, name)
 	doc = frappe.get_doc(doctype, name)
 	doc.flags.ignore_permissions = True
+	if doctype == "Journal Entry" and clean_text(voucher_type) in _EXCHANGE_VOUCHERS:
+		doc.flags.ignore_validate = True
 	if from_repost:
 		doc.make_gl_entries(from_repost=True)
 	else:
@@ -573,7 +663,17 @@ def _rebuild_payment(payment):
 	doc.flags.ignore_permissions = True
 	if payment["mode"] == MULTI and payment.get("advance_account"):
 		doc.flags.hero_repair_advance_account = payment["advance_account"]
+	if payment.get("keep_exchange_journal"):
+		_keep_booked_exchange_journal(doc)
 	doc.make_gl_entries()
+
+
+def _keep_booked_exchange_journal(doc):
+	"""The existing exchange journal is updated in this chain. Do not book another one."""
+	if not frappe.get_meta("Payment Entry Reference").has_field("exchange_gain_loss"):
+		return
+	for row in doc.get("references") or []:
+		row.exchange_gain_loss = 0
 
 
 def _clear_ledger(voucher_type, voucher_no):

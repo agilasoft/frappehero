@@ -23,7 +23,7 @@ frappehero.ArApAccount = class ArApAccount {
 		this.page.main.addClass("fh-page");
 		this.page.main.html(`
 			<div class="fh-app">
-				<p class="fh-muted">${__("Change the receivable or payable GL account on submitted sales or purchase invoices. Receipts and journals that post those invoices change with them. The new GL account can use a different currency. The company-currency amount and the bank amount stay as submitted. Nothing is cancelled.")}</p>
+				<p class="fh-muted">${__("Change the receivable or payable GL account on submitted sales or purchase invoices. Receipts and journals that post those invoices change with them. An exchange gain or loss journal changes its receivable or payable line, and the gain or loss account stays. A receipt that still posts to the current GL account changes too. The new GL account can use a different currency. The company-currency amount and the bank amount stay as submitted. Nothing is cancelled.")}</p>
 				<div class="fh-filters">
 					<div class="fh-company"></div>
 					<div class="fh-side"></div>
