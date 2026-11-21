@@ -377,6 +377,7 @@ def _payment_row(
 
 	targets = {row["account"] for row in references if row["kind"] == "invoice" and row.get("account")}
 	unallocated = _money(source.get("unallocated_amount"))
+	settles_moving_invoice = any(row.get("kind") == "invoice" and row.get("qualifying") for row in references)
 	if party_account not in {from_account, to_account}:
 		return _held_payment(
 			source,
@@ -388,7 +389,8 @@ def _payment_row(
 			bank_amount,
 			party_field,
 		)
-	if len(targets) > 1 or (unallocated > 0 and currency_change):
+	ledger_follows_party = posts_current and not settles_moving_invoice
+	if not ledger_follows_party and (len(targets) > 1 or (unallocated > 0 and currency_change)):
 		if source.get("has_taxes") or source.get("has_deductions"):
 			return _held_payment(
 				source,
@@ -604,7 +606,9 @@ def _journal_line(
 				f"{ref_name} stays in its currency, so this exchange journal stays on {from_account}.",
 				True,
 			)
-		return _move_exchange_line(built, line, to_account, from_currency, to_currency, company_currency)
+		return _move_exchange_line(
+			built, line, invoice, to_account, from_currency, to_currency, company_currency
+		)
 	if voucher_type in EXCHANGE_VOUCHERS:
 		if invoice and invoice.get("action") in (MOVE, HELD):
 			built["touches"] = 1
@@ -630,49 +634,55 @@ def _journal_line(
 	return built, f"This journal posts {ref_name} to {account or 'no account'}, not {from_account}.", True
 
 
-def _move_exchange_line(built, line, to_account, from_currency, to_currency, company_currency):
+def _move_exchange_line(built, line, invoice, to_account, from_currency, to_currency, company_currency):
 	"""Move the receivable or payable line. The gain or loss line stays and does not hold."""
 	built["action"] = "move"
 	built["account"] = to_account
 	built["touches"] = 1
-	if from_currency and to_currency and from_currency != to_currency:
+	if not (from_currency and to_currency and from_currency != to_currency):
+		return built, "", True
+	moving = invoice and invoice.get("action") == MOVE
+	allowed = moving and _currency_change_allowed(
+		invoice.get("currency"), from_currency, to_currency, company_currency
+	)
+	if allowed:
+		problem = _restate_moving_exchange_line(built, line, invoice, to_currency, company_currency)
+	elif to_currency == company_currency:
 		problem = _restate_exchange_line(built, line, to_currency, company_currency)
-		if problem:
-			built["action"] = "keep"
-			built["account"] = clean_text(line.get("account"))
-			return built, problem, True
+	else:
+		problem = (
+			f"This exchange journal is in {from_currency}. Its invoice is not moving, "
+			f"so the currency cannot change to {to_currency}."
+		)
+	if problem:
+		built["action"] = "keep"
+		built["account"] = clean_text(line.get("account"))
+		built.pop("restate", None)
+		return built, problem, True
 	return built, "", True
 
 
-def _restate_exchange_line(built, line, to_currency, company_currency):
-	"""Keep the company amount. A zero account-currency amount stays zero on a foreign account."""
-	debit = _money(line.get("debit"))
-	credit = _money(line.get("credit"))
+def _restate_moving_exchange_line(built, line, invoice, to_currency, company_currency):
+	"""Restate from the company amount. A zero foreign amount stays zero."""
 	account_debit = _money(line.get("debit_in_account_currency"))
 	account_credit = _money(line.get("credit_in_account_currency"))
-	rate = _money(line.get("exchange_rate"), 9)
-	built["restate"] = 1
-	built["account_currency"] = to_currency
-	if not account_debit and not account_credit:
-		if to_currency == company_currency:
-			built["exchange_rate"] = 1
-			built["debit_in_account_currency"] = _show(debit)
-			built["credit_in_account_currency"] = _show(credit)
-			return ""
-		built["exchange_rate"] = _show(rate)
+	if to_currency != company_currency and not account_debit and not account_credit:
+		built["restate"] = 1
+		built["account_currency"] = to_currency
+		built["exchange_rate"] = _show(_money(line.get("exchange_rate"), 9))
 		built["debit_in_account_currency"] = 0
 		built["credit_in_account_currency"] = 0
 		return ""
-	if to_currency == company_currency:
-		built["exchange_rate"] = 1
-		built["debit_in_account_currency"] = _show(debit)
-		built["credit_in_account_currency"] = _show(credit)
-		return ""
-	if not rate and (debit or credit):
-		return "This exchange journal has no exchange rate, so its currency cannot change."
-	built["exchange_rate"] = _show(rate)
-	built["debit_in_account_currency"] = _show(account_debit)
-	built["credit_in_account_currency"] = _show(account_credit)
+	return _restate_journal_line(built, line, invoice, to_currency, company_currency)
+
+
+def _restate_exchange_line(built, line, to_currency, _company_currency):
+	"""A company-currency account carries the company amount at rate 1."""
+	built["restate"] = 1
+	built["account_currency"] = to_currency
+	built["exchange_rate"] = 1
+	built["debit_in_account_currency"] = _show(_money(line.get("debit")))
+	built["credit_in_account_currency"] = _show(_money(line.get("credit")))
 	return ""
 
 
