@@ -5,6 +5,7 @@ import unittest
 
 from frappehero.finance_desk.ar_ap_account_logic import (
 	ArApAccountError,
+	balances_match,
 	check_accounts,
 	plan_accounts,
 	selection_matches,
@@ -737,6 +738,115 @@ class TestCurrencyChange(unittest.TestCase):
 		self.assertEqual(plan["invoices"][0]["action"], "move")
 		self.assertEqual(plan["journals"][0]["action"], "move")
 		self.assertEqual(plan["signature"]["invoices"], ["SI-1"])
+
+	def test_booked_company_amount_keeps_a_ten_dollar_balance(self):
+		reference = _reference("SI-1", 250)
+		reference["exchange_rate"] = 1
+		plan = _currency_plan(
+			[
+				_invoice(
+					"SI-1",
+					account=USD_AR,
+					currency="USD",
+					conversion_rate=1,
+					grand_total=260,
+					base_grand_total=14560,
+					party_account_currency="USD",
+					outstanding_amount=10,
+				)
+			],
+			[
+				_payment(
+					"PE-1",
+					[reference],
+					paid_from=USD_AR,
+					paid_from_account_currency="USD",
+					paid_amount=250,
+					received_amount=14000,
+					base_paid_amount=14000,
+					base_received_amount=14000,
+					has_taxes=1,
+				)
+			],
+			[],
+			from_account=USD_AR,
+			to_account=OLD_AR,
+		)
+		payment = plan["payments"][0]
+		invoice = plan["invoices"][0]
+		self.assertEqual(payment["action"], "move")
+		self.assertEqual(payment["references"][0]["allocated_amount"], 14000)
+		self.assertEqual(payment["party_amount"], 14000)
+		self.assertEqual(payment["party_exchange_rate"], 1)
+		self.assertEqual(invoice["expected_outstanding"], 560)
+		self.assertTrue(balances_match(invoice, 560, "PHP"))
+		self.assertFalse(balances_match(invoice, 14429.56, "PHP"))
+
+	def test_exchange_difference_stays_in_the_open_balance(self):
+		reference = _reference("SI-1", 100)
+		reference["exchange_rate"] = 56
+		plan = _currency_plan(
+			[
+				_invoice(
+					"SI-1",
+					account=USD_AR,
+					currency="USD",
+					conversion_rate=56,
+					grand_total=110,
+					base_grand_total=6160,
+					party_account_currency="USD",
+					outstanding_amount=10,
+				)
+			],
+			[
+				_payment(
+					"PE-1",
+					[reference],
+					paid_from=USD_AR,
+					paid_from_account_currency="USD",
+					paid_amount=100,
+					received_amount=5800,
+					base_paid_amount=5800,
+					base_received_amount=5800,
+					has_deductions=1,
+				)
+			],
+			[
+				_journal(
+					"JE-1",
+					[
+						{
+							"row_name": "je-party",
+							"account": USD_AR,
+							"reference_type": "Sales Invoice",
+							"reference_name": "SI-1",
+							"debit": 200,
+							"credit": 0,
+							"debit_in_account_currency": 0,
+							"credit_in_account_currency": 0,
+							"exchange_rate": 0,
+						},
+						{
+							"row_name": "je-gain",
+							"account": EXPENSE,
+							"reference_type": "Sales Invoice",
+							"reference_name": "SI-1",
+							"debit": 0,
+							"credit": 200,
+						},
+					],
+					voucher_type="Exchange Gain Or Loss",
+				)
+			],
+			from_account=USD_AR,
+			to_account=OLD_AR,
+		)
+		payment = plan["payments"][0]
+		moved = next(row for row in plan["journals"][0]["lines"] if row["row_name"] == "je-party")
+		self.assertEqual(payment["references"][0]["allocated_amount"], 5800)
+		self.assertEqual(moved["debit_in_account_currency"], 200)
+		self.assertEqual(plan["invoices"][0]["expected_outstanding"], 560)
+		self.assertTrue(balances_match(plan["invoices"][0], 560, "PHP"))
 
 	def test_usd_invoice_moves_back_to_the_company_receivable(self):
 		plan = _currency_plan(
