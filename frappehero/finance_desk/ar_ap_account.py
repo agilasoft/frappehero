@@ -21,11 +21,11 @@ from frappehero.finance_desk.ar_ap_account_logic import (
 	SINGLE,
 	ArApAccountError,
 	check_accounts,
+	balances_match,
 	plan_accounts,
 	selection_matches,
 	side_choice,
 )
-from frappehero.finance_desk.receivable_repair_logic import outstanding_matches
 from frappehero.flags import clean_text, parse_payload
 
 _INVOICE_FIELDS = [
@@ -34,6 +34,8 @@ _INVOICE_FIELDS = [
 	"docstatus",
 	"currency",
 	"conversion_rate",
+	"grand_total",
+	"base_grand_total",
 	"outstanding_amount",
 	"party_account_currency",
 	"posting_date",
@@ -696,17 +698,10 @@ def _mismatch(plan, chain) -> str:
 	for name in chain["invoices"]:
 		invoice = invoices[name]
 		current = flt(frappe.db.get_value(invoice["doctype"], name, "outstanding_amount"))
-		expected = flt(invoice["outstanding_amount"])
-		if not outstanding_matches(
-			expected,
-			current,
-			invoice.get("previous_account_currency") or invoice.get("account_currency"),
-			invoice.get("account_currency"),
-			invoice.get("currency"),
-			invoice.get("conversion_rate"),
-			plan.get("company_currency"),
-		):
-			return _("Outstanding on {0} would change from {1} to {2}.").format(name, expected, current)
+		if not balances_match(invoice, current, plan.get("company_currency")):
+			planned = invoice.get("expected_outstanding")
+			shown = planned if planned not in (None, "") else invoice.get("outstanding_amount")
+			return _("Outstanding on {0} would change from {1} to {2}.").format(name, shown, current)
 	for name in chain["payments"]:
 		current = _bank_amount(name)
 		expected = flt(payments[name]["bank_amount"])

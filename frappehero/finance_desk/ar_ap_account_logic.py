@@ -172,6 +172,7 @@ def plan_accounts(
 	for row in journal_rows:
 		row["chain"] = chain_of.get(("journal", row["name"]))
 	_mark_exchange_journals(payment_rows, journal_rows, chosen["doctype"])
+	_set_expected_outstanding(invoice_rows, payment_rows, journal_rows, company_currency, from_currency)
 	return {
 		"company": company,
 		"side": chosen["name"],
@@ -201,6 +202,25 @@ def plan_accounts(
 			"held_journals": sum(1 for row in journal_rows if row["action"] == HELD),
 		},
 	}
+
+
+def balances_match(invoice, current, company_currency="") -> bool:
+	"""True when the rebuilt outstanding is the same open balance in the new currency."""
+	invoice = invoice or {}
+	planned = invoice.get("expected_outstanding")
+	if planned not in (None, ""):
+		return abs(_money(planned) - _money(current)) <= Decimal("0.05")
+	from frappehero.finance_desk.receivable_repair_logic import outstanding_matches
+
+	return outstanding_matches(
+		invoice.get("outstanding_amount"),
+		current,
+		invoice.get("previous_account_currency") or invoice.get("account_currency"),
+		invoice.get("account_currency"),
+		invoice.get("currency"),
+		_open_rate(invoice) or invoice.get("conversion_rate"),
+		company_currency,
+	)
 
 
 def selection_matches(expected, plan) -> bool:
@@ -270,6 +290,8 @@ def _invoice_row(
 		"currency": invoice_currency,
 		"posting_date": clean_text(source.get("posting_date")),
 		"outstanding_amount": _show(_money(source.get("outstanding_amount"))),
+		"grand_total": _show(_money(source.get("grand_total"))),
+		"base_grand_total": _show(_money(source.get("base_grand_total"))),
 		"conversion_rate": _show(_money(source.get("conversion_rate"), 9)),
 		"from_account": from_account,
 		"to_account": destination,
@@ -330,6 +352,7 @@ def _payment_row(
 	party_account, party_currency, party_field, currency_field = _party_fields(source, payment_type)
 	bank_account, bank_amount = _bank(source, payment_type)
 	posts_current = party_account == from_account
+	party_rate = _party_rate(source, payment_type, party_currency or from_currency, company_currency)
 	for reference in source.get("references") or []:
 		if _allocated(reference) and _invoice_action(reference, invoices, doctype) in (MOVE, HELD):
 			touches = True
@@ -342,6 +365,7 @@ def _payment_row(
 			party_account,
 			party_currency or from_currency,
 			company_currency,
+			party_rate,
 		)
 		if problem and not reason:
 			reason = problem
@@ -436,6 +460,7 @@ def _payment_row(
 				to_currency,
 				company_currency,
 				party_currency or from_currency,
+				party_rate,
 			)
 			if problem:
 				return _held_payment(
@@ -492,7 +517,15 @@ def _payment_row(
 
 
 def _reference_row(
-	reference, invoices, doctype, from_account, to_account, party_account, source_currency, company_currency
+	reference,
+	invoices,
+	doctype,
+	from_account,
+	to_account,
+	party_account,
+	source_currency,
+	company_currency,
+	party_rate=Decimal(0),
 ):
 	reference = reference or {}
 	allocated = _allocated(reference)
@@ -535,7 +568,14 @@ def _reference_row(
 	if invoice.get("action") == MOVE and source_currency and destination and source_currency != destination:
 		return (
 			_restated_reference(
-				reference, invoice, allocated, company_currency, source_currency, doctype, row_name
+				reference,
+				invoice,
+				allocated,
+				company_currency,
+				source_currency,
+				doctype,
+				row_name,
+				party_rate,
 			),
 			"",
 		)
@@ -932,15 +972,20 @@ def _currency_change_allowed(invoice_currency, from_currency, to_currency, compa
 	return from_currency in allowed and to_currency in allowed
 
 
-def _restated_reference(reference, invoice, allocated, company_currency, source_currency, doctype, row_name):
+def _restated_reference(
+	reference, invoice, allocated, company_currency, source_currency, doctype, row_name, party_rate=Decimal(0)
+):
 	invoice_currency = clean_text(invoice.get("currency")).upper()
 	invoice_amount = _invoice_allocation(reference, invoice, allocated, company_currency, source_currency)
 	account_currency = clean_text(invoice.get("account_currency")).upper()
+	rate = invoice.get("conversion_rate")
+	if account_currency == company_currency and clean_text(source_currency).upper() not in ("", company_currency):
+		rate = _company_conversion_rate(invoice, party_rate)
 	account_amount = _account_amount(
 		invoice_amount,
 		invoice_currency,
 		account_currency,
-		invoice.get("conversion_rate"),
+		rate,
 		company_currency,
 	)
 	payment_rate = _company_rate(
@@ -1041,13 +1086,17 @@ def _row_company_amount(row, company_currency) -> Decimal:
 	return _money(_money(row.get("invoice_amount") or row.get("allocated_amount")) * rate)
 
 
-def _restate_open_references(references, invoices, to_account, to_currency, company_currency, source_currency):
+def _restate_open_references(
+	references, invoices, to_account, to_currency, company_currency, source_currency, party_rate=Decimal(0)
+):
 	"""Put every remaining invoice row into the new account currency."""
 	for reference in references:
 		if reference.get("kind") != "invoice" or reference.get("restate"):
 			continue
 		invoice = invoices.get(reference.get("reference_name")) or {}
 		rate = _money(reference.get("source_exchange_rate") or invoice.get("conversion_rate"), 9)
+		if to_currency == company_currency and source_currency != company_currency:
+			rate = _company_conversion_rate(invoice, party_rate) or rate
 		amount = _money(reference.get("source_allocated", reference.get("allocated_amount")))
 		if source_currency == to_currency:
 			converted = amount
@@ -1170,6 +1219,106 @@ def _party_base(source, payment_type):
 	if payment_type == "Pay":
 		return _money(source.get("base_received_amount"))
 	return _money(source.get("base_paid_amount"))
+
+
+def _party_amount(source, payment_type) -> Decimal:
+	if payment_type == "Pay":
+		return _money(source.get("received_amount"))
+	return _money(source.get("paid_amount"))
+
+
+def _party_rate(source, payment_type, party_currency, company_currency) -> Decimal:
+	"""Company currency already booked for one unit of this receipt.
+
+	A rate of 1 is not usable here: the base amount was stored in the same
+	units as the foreign amount, so the invoice's booked rate is used instead.
+	"""
+	party_currency = clean_text(party_currency).upper()
+	company_currency = clean_text(company_currency).upper()
+	if not party_currency or party_currency == company_currency:
+		return Decimal(0)
+	base = _party_base(source, payment_type)
+	amount = _party_amount(source, payment_type)
+	if not amount or not base:
+		return Decimal(0)
+	rate = _money(base / amount, 9)
+	if not rate or rate == 1:
+		return Decimal(0)
+	return rate
+
+
+def _invoice_base(invoice) -> Decimal:
+	return _money((invoice or {}).get("base_grand_total"))
+
+
+def _open_rate(invoice) -> Decimal:
+	"""Company currency per invoice-currency unit, from the booked totals."""
+	invoice = invoice or {}
+	base = _invoice_base(invoice)
+	grand = _money(invoice.get("grand_total"))
+	if grand and base:
+		rate = _money(abs(base / grand), 9)
+		if rate:
+			return rate
+	return _money(invoice.get("conversion_rate"), 9)
+
+
+def _company_conversion_rate(invoice, party_rate) -> Decimal:
+	"""Rate that keeps the company-currency credit already posted on the receipt."""
+	return _money(party_rate, 9) or _open_rate(invoice) or _money((invoice or {}).get("conversion_rate"), 9)
+
+
+def _set_expected_outstanding(invoices, payments, journals, company_currency, from_currency):
+	"""The outstanding after the move, in the new account's currency."""
+	company_currency = clean_text(company_currency).upper()
+	from_currency = clean_text(from_currency).upper()
+	for invoice in invoices or []:
+		if invoice.get("action") != MOVE:
+			continue
+		previous = clean_text(invoice.get("previous_account_currency")).upper() or from_currency
+		current = clean_text(invoice.get("account_currency")).upper()
+		if not previous or not current or previous == current:
+			continue
+		invoice_currency = clean_text(invoice.get("currency")).upper()
+		if current == company_currency and previous != company_currency:
+			invoice["expected_outstanding"] = _show(_company_outstanding(invoice, payments, journals))
+		elif previous == company_currency and current == invoice_currency and current != company_currency:
+			rate = _open_rate(invoice) or _money(invoice.get("conversion_rate"), 9)
+			amount = _money(invoice.get("outstanding_amount"))
+			invoice["expected_outstanding"] = _show(_money(amount / rate) if rate else amount)
+
+
+def _company_outstanding(invoice, payments, journals) -> Decimal:
+	"""Open balance in company currency after this chain is restated."""
+	payable = invoice.get("doctype") == PURCHASE_INVOICE
+	settled = Decimal(0)
+	for payment in payments or []:
+		if payment.get("action") != MOVE:
+			continue
+		for reference in payment.get("references") or []:
+			if reference.get("kind") != "invoice" or reference.get("reference_name") != invoice.get("name"):
+				continue
+			if clean_text(reference.get("account")) != clean_text(invoice.get("to_account")):
+				continue
+			settled += _money(reference.get("allocated_amount"))
+	exchange = Decimal(0)
+	for journal in journals or []:
+		if journal.get("action") != MOVE or clean_text(journal.get("voucher_type")) not in EXCHANGE_VOUCHERS:
+			continue
+		for line in journal.get("lines") or []:
+			if line.get("action") != "move" or line.get("reference_name") != invoice.get("name"):
+				continue
+			if clean_text(line.get("account")) != clean_text(invoice.get("to_account")):
+				continue
+			movement = _money(line.get("debit_in_account_currency")) - _money(line.get("credit_in_account_currency"))
+			exchange += -movement if payable else movement
+	base = _invoice_base(invoice)
+	if not base:
+		rate = _open_rate(invoice) or Decimal(1)
+		return _money(_money(invoice.get("outstanding_amount")) * rate)
+	if payable:
+		base = abs(base)
+	return _money(base - settled + exchange)
 
 
 def _party_fields(source, payment_type):
