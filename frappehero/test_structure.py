@@ -16,6 +16,10 @@ class TestAppStructure(unittest.TestCase):
 		self.assertIn(f"/assets/frappehero/{script.removeprefix('public/')}", hooks.app_include_js)
 		self.assertTrue((PACKAGE / script).is_file())
 
+	def test_document_status_loads_on_the_desk(self):
+		self.assertIn("/assets/frappehero/js/document_status.js", hooks.app_include_js)
+		self.assertTrue((PACKAGE / "public" / "js" / "document_status.js").is_file())
+
 	def test_modules_cover_every_doctype_page_and_report(self):
 		modules = {
 			line.strip()
