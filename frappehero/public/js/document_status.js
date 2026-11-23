@@ -46,6 +46,10 @@ const STATUS_COLORS = {
 	"Purchase Invoice": PURCHASE_INVOICE_COLORS,
 };
 
+// A workflow often writes one of these into Status for every draft. The
+// document's own workflow state is the status to show.
+const GENERIC_DRAFT_STATUSES = new Set(["draft", "pending", "pending for approval", "pending approval"]);
+
 function docstatusOf(doc) {
 	const value = doc && doc.docstatus;
 	if (value === undefined || value === null || value === "") {
@@ -70,22 +74,42 @@ function text(value) {
 	return String(value == null ? "" : value).trim();
 }
 
+function isGenericDraftStatus(value) {
+	return GENERIC_DRAFT_STATUSES.has(text(value).toLowerCase());
+}
+
+function workflowStateOf(doc, stateField) {
+	const field = text(stateField);
+	if (!field) {
+		return null;
+	}
+	const configured = text(doc[field]);
+	const dedicated = text(doc.workflow_state);
+	if (field === "status" && isGenericDraftStatus(configured) && dedicated && dedicated !== configured) {
+		return { field: "workflow_state", state: dedicated };
+	}
+	if (!configured) {
+		return null;
+	}
+	return { field: field, state: configured };
+}
+
 function presentedIndicator(doc, options) {
 	const settings = options || {};
 	const doctype = settings.doctype || (doc && doc.doctype);
-	if (!doc || !DOCTYPES.includes(doctype) || doc.__unsaved || !settings.stateField) {
+	if (!doc || !DOCTYPES.includes(doctype) || doc.__unsaved || !text(settings.stateField)) {
 		return null;
 	}
 	const translate = settings.translate || ((label) => label);
 	const docstatus = docstatusOf(doc);
-	const state = text(doc[settings.stateField]);
+	const resolved = workflowStateOf(doc, settings.stateField);
 
-	if (docstatus === 0 && state) {
-		const style = settings.stateStyle ? settings.stateStyle(state) : "";
+	if (docstatus === 0 && resolved) {
+		const style = settings.stateStyle ? settings.stateStyle(resolved.state) : "";
 		return [
-			translate(state, doctype),
+			translate(resolved.state, doctype),
 			WORKFLOW_STYLE_COLORS[style] || "gray",
-			settings.stateField + ",=," + state,
+			resolved.field + ",=," + resolved.state,
 		];
 	}
 	if (docstatus === 2) {
@@ -131,6 +155,13 @@ function purchaseIndicator(doc, doctype, translate, settings) {
 	return null;
 }
 
+function hasField(desk, doctype, fieldname) {
+	if (!desk.meta || typeof desk.meta.has_field !== "function") {
+		return false;
+	}
+	return Boolean(desk.meta.has_field(doctype, fieldname));
+}
+
 function stateFieldName(desk, doctype) {
 	try {
 		if (!desk.workflow || typeof desk.workflow.get_state_fieldname !== "function") {
@@ -163,6 +194,50 @@ function translateLabel(label, doctype) {
 	return label;
 }
 
+function indicatorOptions(desk, doctype) {
+	return {
+		doctype: doctype,
+		stateField: stateFieldName(desk, doctype),
+		stateStyle: workflowStyle,
+		translate: translateLabel,
+		isReleaseInFuture: (date) => releaseIsInFuture(desk, date),
+	};
+}
+
+function paintStatus(control, label, value) {
+	if (!control) {
+		return;
+	}
+	if (control.disp_area && typeof control.disp_area.text === "function") {
+		control.disp_area.text(label);
+	}
+	const input = control.$input;
+	if (!input || typeof input.val !== "function") {
+		return;
+	}
+	const isSelect = typeof input.is === "function" && input.is("select");
+	if (isSelect && typeof input.get === "function") {
+		const element = input.get(0);
+		const options = element && element.options ? Array.from(element.options) : [];
+		if (element && !options.some((option) => option.value === value)) {
+			element.add(new Option(label, value));
+		}
+	}
+	input.val(isSelect ? value : label);
+}
+
+function showStateOnStatus(frm, desk) {
+	if (!frm || !frm.doc || !frm.fields_dict || !frm.fields_dict.status) {
+		return;
+	}
+	const doctype = frm.doctype || frm.doc.doctype;
+	const resolved = workflowStateOf(frm.doc, stateFieldName(desk, doctype));
+	if (docstatusOf(frm.doc) !== 0 || !resolved || resolved.state === text(frm.doc.status)) {
+		return;
+	}
+	paintStatus(frm.fields_dict.status, translateLabel(resolved.state, doctype), resolved.state);
+}
+
 function install(desk) {
 	if (!desk || desk.__heroDocumentStatus || typeof desk.get_indicator !== "function") {
 		return;
@@ -171,13 +246,7 @@ function install(desk) {
 	const original = desk.get_indicator;
 	const indicator = function (doc, doctype, showWorkflowState) {
 		const name = doctype || (doc && doc.doctype);
-		const presented = presentedIndicator(doc, {
-			doctype: name,
-			stateField: stateFieldName(desk, name),
-			stateStyle: workflowStyle,
-			translate: translateLabel,
-			isReleaseInFuture: (date) => releaseIsInFuture(desk, date),
-		});
+		const presented = presentedIndicator(doc, indicatorOptions(desk, name));
 		if (!presented) {
 			return original.call(this, doc, doctype, showWorkflowState);
 		}
@@ -186,6 +255,16 @@ function install(desk) {
 	indicator._heroDocumentStatus = true;
 	desk.get_indicator = indicator;
 
+	if (desk.ui && desk.ui.form && typeof desk.ui.form.on === "function") {
+		DOCTYPES.forEach((doctype) => {
+			desk.ui.form.on(doctype, {
+				refresh(frm) {
+					showStateOnStatus(frm, desk);
+				},
+			});
+		});
+	}
+
 	const ListView = desk.views && desk.views.ListView;
 	if (!ListView || !ListView.prototype || typeof ListView.prototype.set_fields !== "function") {
 		return;
@@ -193,9 +272,16 @@ function install(desk) {
 	const originalFields = ListView.prototype.set_fields;
 	ListView.prototype.set_fields = async function () {
 		const result = await originalFields.apply(this, arguments);
-		const field = stateFieldName(desk, this.doctype);
-		if (field && DOCTYPES.includes(this.doctype) && typeof this._add_field === "function") {
-			this._add_field(field);
+		if (!DOCTYPES.includes(this.doctype) || typeof this._add_field !== "function") {
+			return result;
+		}
+		const configured = stateFieldName(desk, this.doctype);
+		if (!configured) {
+			return result;
+		}
+		this._add_field(configured);
+		if (configured !== "workflow_state" && hasField(desk, this.doctype, "workflow_state")) {
+			this._add_field("workflow_state");
 		}
 		return result;
 	};
@@ -222,6 +308,9 @@ if (typeof module !== "undefined" && module.exports) {
 	module.exports = {
 		DOCTYPES,
 		presentedIndicator,
+		workflowStateOf,
+		paintStatus,
+		showStateOnStatus,
 		install,
 	};
 }

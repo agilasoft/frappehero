@@ -64,6 +64,126 @@ test("a submitted sales invoice shows Paid, Overdue, and the other invoice statu
 	}
 });
 
+test("a generic pending status shows the document workflow state", () => {
+	const indicator = present(
+		{
+			doctype: "Sales Invoice",
+			docstatus: 0,
+			status: "Pending for Approval",
+			workflow_state: "With Finance",
+		},
+		{ stateField: "status", stateStyle: (state) => (state === "With Finance" ? "Primary" : "") }
+	);
+	assert.deepEqual(indicator, ["With Finance:Sales Invoice", "blue", "workflow_state,=,With Finance"]);
+});
+
+test("a status workflow keeps its own state when workflow_state is empty or stale", () => {
+	assert.deepEqual(
+		present(
+			{
+				doctype: "Sales Invoice",
+				docstatus: 0,
+				status: "With Finance",
+				workflow_state: "",
+			},
+			{ stateField: "status", stateStyle: () => "Primary" }
+		),
+		["With Finance:Sales Invoice", "blue", "status,=,With Finance"]
+	);
+	assert.deepEqual(
+		present(
+			{
+				doctype: "Sales Invoice",
+				docstatus: 0,
+				status: "With Finance",
+				workflow_state: "Old Step",
+			},
+			{ stateField: "status", stateStyle: () => "Primary" }
+		),
+		["With Finance:Sales Invoice", "blue", "status,=,With Finance"]
+	);
+});
+
+test("a leftover workflow state does not replace the indicator", () => {
+	assert.equal(
+		present(
+			{
+				doctype: "Sales Invoice",
+				docstatus: 1,
+				status: "Paid",
+				workflow_state: "Old Step",
+			},
+			{ stateField: "" }
+		),
+		null
+	);
+	assert.equal(
+		present(
+			{
+				doctype: "Sales Invoice",
+				docstatus: 0,
+				status: "Draft",
+				workflow_state: "Old Step",
+			},
+			{ stateField: "" }
+		),
+		null
+	);
+});
+
+test("Pending for Approval stays when that is the workflow state", () => {
+	const indicator = present(
+		{
+			doctype: "Purchase Invoice",
+			docstatus: 0,
+			status: "Pending for Approval",
+			workflow_state: "Pending for Approval",
+		},
+		{ stateField: "status", stateStyle: () => "Warning" }
+	);
+	assert.deepEqual(indicator, [
+		"Pending for Approval:Purchase Invoice",
+		"orange",
+		"status,=,Pending for Approval",
+	]);
+});
+
+test("the status field shows the workflow state while the stored status stays put", () => {
+	const shown = [];
+	const frm = {
+		doctype: "Payment Entry",
+		doc: {
+			doctype: "Payment Entry",
+			docstatus: 0,
+			status: "Pending for Approval",
+			workflow_state: "With Treasury",
+		},
+		fields_dict: {
+			status: {
+				disp_area: {
+					text(value) {
+						shown.push(value);
+					},
+				},
+			},
+		},
+	};
+	status.showStateOnStatus(frm, {
+		workflow: {
+			get_state_fieldname() {
+				return "status";
+			},
+		},
+		meta: {
+			has_field(doctype, fieldname) {
+				return doctype === "Payment Entry" && fieldname === "workflow_state";
+			},
+		},
+	});
+	assert.deepEqual(shown, ["With Treasury"]);
+	assert.equal(frm.doc.status, "Pending for Approval");
+});
+
 test("a draft without a workflow state stays Draft", () => {
 	assert.deepEqual(
 		present({ doctype: "Sales Invoice", docstatus: "0", status: "Draft", workflow_state: "  " }),
