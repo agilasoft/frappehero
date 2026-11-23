@@ -10,11 +10,15 @@ the invoice, then stamped as returns.
 """
 
 import frappe
+from frappe.query_builder import Case
+from frappe.query_builder.functions import Count, Sum
+from frappe.utils import escape_html
 
 from frappehero.finance_desk.opening_invoice_logic import (
 	OpeningInvoiceError,
 	against_can_link,
 	apply_note,
+	fold_opening_summary,
 	invoice_kind,
 	retitle,
 )
@@ -30,6 +34,20 @@ def _base_class():
 
 
 class OpeningInvoiceCreationTool(_base_class()):
+	def get_opening_invoice_summary(self):
+		companies = frappe.get_list("Company", fields=["name as company", "default_currency as currency"])
+		if not companies:
+			return None, None
+
+		company_currency = {row.company: row.currency for row in companies}
+		rows_by_doctype = {
+			doctype: _opening_invoice_rows(doctype, list(company_currency))
+			for doctype in ("Sales Invoice", "Purchase Invoice")
+		}
+		summary, max_count = fold_opening_summary(company_currency, rows_by_doctype)
+		escaped = {escape_html(company): values for company, values in summary.items()}
+		return escaped, max_count
+
 	def set_missing_values(self, row):
 		kind = self._kind()
 		self._as_base(kind, lambda: super(OpeningInvoiceCreationTool, self).set_missing_values(row))
@@ -59,6 +77,30 @@ class OpeningInvoiceCreationTool(_base_class()):
 			return call()
 		finally:
 			self.invoice_type = original
+
+
+def _opening_invoice_rows(doctype, companies):
+	"""Submitted opening invoices, grouped by company and return flag."""
+	invoice = frappe.qb.DocType(doctype)
+	company = frappe.qb.DocType("Company")
+	outstanding = (
+		Case()
+		.when(invoice.party_account_currency == company.default_currency, invoice.outstanding_amount)
+		.else_(invoice.outstanding_amount * invoice.conversion_rate)
+	)
+	return (
+		frappe.qb.from_(invoice)
+		.join(company)
+		.on(invoice.company == company.name)
+		.select(
+			invoice.company,
+			invoice.is_return,
+			Count(invoice.name).as_("total_invoices"),
+			Sum(outstanding).as_("outstanding_amount"),
+		)
+		.where((invoice.is_opening == "Yes") & (invoice.docstatus == 1) & (invoice.company.isin(companies)))
+		.groupby(invoice.company, invoice.is_return)
+	).run(as_dict=True)
 
 
 def _against_is_submitted(doctype, name, company) -> bool:
