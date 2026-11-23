@@ -15,6 +15,10 @@ bench --site your-site migrate
 
 **Frappe Hero** is an icon on the desktop and opens at `/desk/frappe-hero`. The dock lists Frappe Hero, Permission Studio, Accounts Mapping, Access Desk, Finance Desk, Dispute Desk, and Collections Desk. System Manager can use every module. Accounts Manager can use Account Mapper, the unmapped report, the finance desk, the dispute desk, and the collections desk. Accounts User can log collection calls, send a statement, raise a claim or incident, and draft a receipt.
 
+## Status
+
+Sales Invoice, Purchase Invoice, and Payment Entry keep Workflow State and Status as two fields. The colored status on the list and beside the form title is one pill. While the document is draft, that pill is the workflow state, in the workflow state's own color. After it is submitted, the pill is the status ERPNext already uses: Paid, Partly Paid, Unpaid, Overdue, Return, Credit Note Issued, Debit Note Issued, Internal Transfer, and the discounted variants. A purchase invoice on hold shows On Hold, or Temporarily on Hold when the release date is still ahead. A submitted Payment Entry shows Submitted. A cancelled document shows Cancelled. The workflow, the stored status, and the actions are unchanged. After updating Frappe Hero, run `bench build --app frappehero` and reload the desk.
+
 ## Permission Studio
 
 User Permissions are one row per user, per document, per value. Permission Studio starts from the team instead.
