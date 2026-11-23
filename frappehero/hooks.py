@@ -107,6 +107,7 @@ scheduler_events = {
 # Collection Call logs a call against a customer, emails the statement, and
 # can draft a receipt or raise a claim, an incident, or a dispute.
 # Sales Invoice, Purchase Invoice, and Payment Entry show one status pill.
-# A draft shows its workflow state. A submitted invoice shows Paid, Partly
+# A draft shows its own workflow state, including when Status still says
+# Pending for Approval. A submitted invoice shows Paid, Partly
 # Paid, Unpaid, Overdue, and the other ERPNext statuses. A submitted payment
 # shows Submitted. A cancelled document shows Cancelled.
