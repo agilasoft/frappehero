@@ -77,6 +77,60 @@ test("a generic pending status shows the document workflow state", () => {
 	assert.deepEqual(indicator, ["With Finance:Sales Invoice", "blue", "workflow_state,=,With Finance"]);
 });
 
+test("a status workflow keeps its own state when workflow_state is empty or stale", () => {
+	assert.deepEqual(
+		present(
+			{
+				doctype: "Sales Invoice",
+				docstatus: 0,
+				status: "With Finance",
+				workflow_state: "",
+			},
+			{ stateField: "status", stateStyle: () => "Primary" }
+		),
+		["With Finance:Sales Invoice", "blue", "status,=,With Finance"]
+	);
+	assert.deepEqual(
+		present(
+			{
+				doctype: "Sales Invoice",
+				docstatus: 0,
+				status: "With Finance",
+				workflow_state: "Old Step",
+			},
+			{ stateField: "status", stateStyle: () => "Primary" }
+		),
+		["With Finance:Sales Invoice", "blue", "status,=,With Finance"]
+	);
+});
+
+test("a leftover workflow state does not replace the indicator", () => {
+	assert.equal(
+		present(
+			{
+				doctype: "Sales Invoice",
+				docstatus: 1,
+				status: "Paid",
+				workflow_state: "Old Step",
+			},
+			{ stateField: "" }
+		),
+		null
+	);
+	assert.equal(
+		present(
+			{
+				doctype: "Sales Invoice",
+				docstatus: 0,
+				status: "Draft",
+				workflow_state: "Old Step",
+			},
+			{ stateField: "" }
+		),
+		null
+	);
+});
+
 test("Pending for Approval stays when that is the workflow state", () => {
 	const indicator = present(
 		{
@@ -90,7 +144,7 @@ test("Pending for Approval stays when that is the workflow state", () => {
 	assert.deepEqual(indicator, [
 		"Pending for Approval:Purchase Invoice",
 		"orange",
-		"workflow_state,=,Pending for Approval",
+		"status,=,Pending for Approval",
 	]);
 });
 

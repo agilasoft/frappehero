@@ -79,39 +79,25 @@ function isGenericDraftStatus(value) {
 }
 
 function workflowStateOf(doc, stateField) {
-	const dedicated = text(doc.workflow_state);
 	const field = text(stateField);
-	const configured = field ? text(doc[field]) : "";
-	const genericStatus = field === "status" && isGenericDraftStatus(configured);
-
-	if (dedicated && (!configured || genericStatus && dedicated !== configured)) {
+	if (!field) {
+		return null;
+	}
+	const configured = text(doc[field]);
+	const dedicated = text(doc.workflow_state);
+	if (field === "status" && isGenericDraftStatus(configured) && dedicated && dedicated !== configured) {
 		return { field: "workflow_state", state: dedicated };
 	}
-	if (field === "workflow_state" && dedicated) {
-		return { field: "workflow_state", state: dedicated };
+	if (!configured) {
+		return null;
 	}
-	if (configured && field && field !== "status") {
-		return { field: field, state: configured };
-	}
-	if (configured && field === "status" && !genericStatus) {
-		return { field: "status", state: configured };
-	}
-	if (dedicated) {
-		return { field: "workflow_state", state: dedicated };
-	}
-	if (configured && field) {
-		return { field: field, state: configured };
-	}
-	return null;
+	return { field: field, state: configured };
 }
 
 function presentedIndicator(doc, options) {
 	const settings = options || {};
 	const doctype = settings.doctype || (doc && doc.doctype);
-	if (!doc || !DOCTYPES.includes(doctype) || doc.__unsaved) {
-		return null;
-	}
-	if (!text(settings.stateField) && !text(doc.workflow_state)) {
+	if (!doc || !DOCTYPES.includes(doctype) || doc.__unsaved || !text(settings.stateField)) {
 		return null;
 	}
 	const translate = settings.translate || ((label) => label);
@@ -130,9 +116,6 @@ function presentedIndicator(doc, options) {
 		return [translate("Cancelled", doctype), "red", "docstatus,=,2"];
 	}
 	if (docstatus === 0) {
-		if (!settings.stateField && !text(doc.workflow_state)) {
-			return null;
-		}
 		return [translate("Draft", doctype), "red", "docstatus,=,0"];
 	}
 
@@ -174,24 +157,20 @@ function purchaseIndicator(doc, doctype, translate, settings) {
 
 function hasField(desk, doctype, fieldname) {
 	if (!desk.meta || typeof desk.meta.has_field !== "function") {
-		return true;
+		return false;
 	}
 	return Boolean(desk.meta.has_field(doctype, fieldname));
 }
 
 function stateFieldName(desk, doctype) {
-	let configured = "";
 	try {
-		if (desk.workflow && typeof desk.workflow.get_state_fieldname === "function") {
-			configured = text(desk.workflow.get_state_fieldname(doctype));
+		if (!desk.workflow || typeof desk.workflow.get_state_fieldname !== "function") {
+			return "";
 		}
+		return text(desk.workflow.get_state_fieldname(doctype));
 	} catch (error) {
-		configured = "";
+		return "";
 	}
-	if ((!configured || configured === "status") && hasField(desk, doctype, "workflow_state")) {
-		return "workflow_state";
-	}
-	return configured;
 }
 
 function workflowStyle(state) {
@@ -296,12 +275,14 @@ function install(desk) {
 		if (!DOCTYPES.includes(this.doctype) || typeof this._add_field !== "function") {
 			return result;
 		}
-		const fields = new Set([stateFieldName(desk, this.doctype), "workflow_state"].filter(Boolean));
-		fields.forEach((field) => {
-			if (hasField(desk, this.doctype, field)) {
-				this._add_field(field);
-			}
-		});
+		const configured = stateFieldName(desk, this.doctype);
+		if (!configured) {
+			return result;
+		}
+		this._add_field(configured);
+		if (configured !== "workflow_state" && hasField(desk, this.doctype, "workflow_state")) {
+			this._add_field("workflow_state");
+		}
 		return result;
 	};
 }
