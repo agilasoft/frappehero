@@ -51,7 +51,7 @@ frappe.ui.form.on("Sales Invoice", {
 			);
 			return;
 		}
-		frm.add_custom_button(__("Raise Dispute"), () => raise_dispute(frm), __("Dispute"));
+		frm.add_custom_button(__("Dispute"), () => raise_dispute(frm), __("Create"));
 	},
 
 	customer(frm) {
