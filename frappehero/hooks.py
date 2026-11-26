@@ -100,9 +100,10 @@ scheduler_events = {
 # payment moves. An Internal Transfer draws that number from the Bank Account
 # on Account Paid From. Migrate marks numbers already stored on an Internal
 # Transfer so those cheques are not issued again.
-# Payment references also show the invoice currency and the invoice total in
-# that currency. Grand Total, Outstanding, and Allocated stay in the party
-# account currency.
+# Payment references show the invoice currency and the invoice total in
+# that currency. The transaction row also shows Allocated Amount and
+# Exchange Rate. Grand Total and Outstanding stay off that grid. Allocated
+# Amount stays in the party account currency.
 # Payment Entry allocates one bank amount across several party accounts and
 # invoice currencies. The party lines, advance, rate difference, and bank line
 # post on that Payment Entry. A payment on one account is unchanged.

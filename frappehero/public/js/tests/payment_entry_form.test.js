@@ -26,6 +26,7 @@ function load(options = {}) {
 		writes: [],
 		timers: [],
 		locals: {},
+		docfields: {},
 		dirtied: false,
 	};
 	const invoices =
@@ -61,8 +62,17 @@ function load(options = {}) {
 				},
 			},
 			meta: {
-				get_docfield() {
-					return {};
+				get_docfield(doctype, fieldname) {
+					const key = doctype + "." + fieldname;
+					if (!shared.docfields[key]) {
+						shared.docfields[key] = {
+							fieldname,
+							hidden: 0,
+							read_only: fieldname === "allocated_amount" || fieldname === "exchange_rate" ? 1 : 0,
+							in_list_view: fieldname === "allocated_amount" || fieldname === "total_amount" ? 1 : 0,
+						};
+					}
+					return shared.docfields[key];
 				},
 			},
 			model: {
@@ -352,4 +362,39 @@ test("a submitted payment is not rewritten on open or by the invoice amount hand
 	assert.equal(row.hero_bank_amount, 5000);
 	assert.equal(shared.writes.length, 0);
 	assert.equal(frm.doc.__unsaved || 0, 0);
+});
+
+test("the transaction grid shows allocated amount and exchange rate", async () => {
+	const { shared, fire, flush, payment } = load({});
+	const frm = payment([savedRow()]);
+	fire("Payment Entry", "refresh", frm);
+	await flush();
+
+	const allocated = shared.docfields["Payment Entry Reference.allocated_amount"];
+	const rate = shared.docfields["Payment Entry Reference.exchange_rate"];
+	const total = shared.docfields["Payment Entry Reference.total_amount"];
+	assert.equal(allocated.hidden, 0);
+	assert.equal(allocated.in_list_view, 1);
+	assert.equal(allocated.read_only, 0);
+	assert.equal(rate.hidden, 0);
+	assert.equal(rate.in_list_view, 1);
+	assert.equal(rate.read_only, 1);
+	assert.equal(total.hidden, 1);
+	assert.equal(total.in_list_view, 0);
+});
+
+test("a submitted payment shows the amounts and leaves them read only", async () => {
+	const { shared, fire, flush, payment } = load({});
+	const frm = payment([savedRow()], { docstatus: 1 });
+	fire("Payment Entry", "refresh", frm);
+	await flush();
+
+	const allocated = shared.docfields["Payment Entry Reference.allocated_amount"];
+	const rate = shared.docfields["Payment Entry Reference.exchange_rate"];
+	assert.equal(allocated.hidden, 0);
+	assert.equal(allocated.in_list_view, 1);
+	assert.equal(allocated.read_only, 1);
+	assert.equal(rate.hidden, 0);
+	assert.equal(rate.in_list_view, 1);
+	assert.equal(rate.read_only, 1);
 });
