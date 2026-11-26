@@ -10,6 +10,7 @@ the results.
 import json
 
 from frappehero.flags import as_flag, clean_text
+from frappehero.permission_studio.logic import BLOCKED_USERS
 
 PERM_BITS = (
 	"read",
@@ -272,6 +273,52 @@ def share_plan(members, shares) -> dict:
 		"missing": [user for user in wanted if user not in already_set],
 		"already": [user for user in wanted if user in already_set],
 	}
+
+
+SHARE_RIGHTS = ("read", "write", "share", "submit")
+
+
+def assignment_share(user, reference_type, reference_name, status, is_submittable, sharing_enabled=1) -> dict | None:
+	"""Rights granted when a document is assigned to a user.
+
+	An open assignment shares read, write, and share. Submit is included only
+	when the DocType can be submitted. Personal to-dos, closed assignments,
+	Administrator, and Guest are left alone. A site that has turned document
+	sharing off is left alone too.
+	"""
+	if not as_flag(sharing_enabled):
+		return None
+	assignee = clean_text(user)
+	doctype = clean_text(reference_type)
+	docname = clean_text(reference_name)
+	if clean_text(status) != "Open":
+		return None
+	if not assignee or assignee in BLOCKED_USERS or not doctype or not docname:
+		return None
+	return {
+		"user": assignee,
+		"doctype": doctype,
+		"docname": docname,
+		"read": 1,
+		"write": 1,
+		"share": 1,
+		"submit": 1 if as_flag(is_submittable) else 0,
+	}
+
+
+def missing_share_rights(current, wanted) -> dict:
+	"""Bits that are on for the assignment and still off on the share.
+
+	A bit that is already granted stays granted. Submit is not turned off when
+	the DocType cannot be submitted.
+	"""
+	current = current or {}
+	wanted = wanted or {}
+	missing = {}
+	for bit in SHARE_RIGHTS:
+		if as_flag(wanted.get(bit)) and not as_flag(current.get(bit)):
+			missing[bit] = 1
+	return missing
 
 
 def expired_share_names(shares, today) -> list[str]:
