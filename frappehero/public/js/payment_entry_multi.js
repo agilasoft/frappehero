@@ -132,11 +132,9 @@ frappe.ui.form.on("Payment Entry Reference", {
 const HIDDEN_REFERENCE_FIELDS = [
 	"total_amount",
 	"outstanding_amount",
-	"allocated_amount",
 	"account",
 	"account_type",
 	"payment_type",
-	"exchange_rate",
 	"exchange_gain_loss",
 	"hero_account",
 	"hero_account_currency",
@@ -147,6 +145,9 @@ const HIDDEN_REFERENCE_FIELDS = [
 	"hero_bank_amount",
 	"hero_allocation_basis",
 ];
+
+// The party-currency allocation and its exchange rate stay on the transaction row.
+const SHOWN_REFERENCE_FIELDS = ["allocated_amount", "exchange_rate"];
 
 function hide_calculated_amounts(frm) {
 	const grid = frm.fields_dict.references && frm.fields_dict.references.grid;
@@ -162,6 +163,17 @@ function hide_calculated_amounts(frm) {
 		field.hidden = 1;
 		field.read_only = 1;
 		field.in_list_view = 0;
+	});
+	SHOWN_REFERENCE_FIELDS.forEach((fieldname) => {
+		const field = frappe.meta.get_docfield("Payment Entry Reference", fieldname, frm.doc.name);
+		if (!field) {
+			return;
+		}
+		field.hidden = 0;
+		field.in_list_view = 1;
+		if (fieldname === "allocated_amount" && is_draft(frm)) {
+			field.read_only = 0;
+		}
 	});
 	if (typeof grid.setup_visible_columns === "function") {
 		grid.setup_visible_columns();

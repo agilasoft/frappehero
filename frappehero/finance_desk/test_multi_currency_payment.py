@@ -524,6 +524,20 @@ class TestMultiCurrencyPayment(unittest.TestCase):
 		self.assertNotIn('hero_allocation_basis = "Payment"', script)
 		self.assertIn('hero_allocation_basis = "Invoice"', script)
 		self.assertIn("hide_calculated_amounts", script)
+		self.assertIn("SHOWN_REFERENCE_FIELDS", script)
+		hidden_fields = script.split("HIDDEN_REFERENCE_FIELDS = [", 1)[1].split("];", 1)[0]
+		shown_fields = script.split("SHOWN_REFERENCE_FIELDS = [", 1)[1].split("];", 1)[0]
+		self.assertNotIn('"allocated_amount"', hidden_fields)
+		self.assertNotIn('"exchange_rate"', hidden_fields)
+		self.assertIn('"allocated_amount"', shown_fields)
+		self.assertIn('"exchange_rate"', shown_fields)
+		reference_fields = install.split("def ensure_payment_reference_fields", 1)[1].split("\ndef ", 1)[0]
+		hidden_standard = reference_fields.split("for fieldname in (", 1)[1].split("):", 1)[0]
+		self.assertNotIn('"allocated_amount"', hidden_standard)
+		self.assertNotIn('"exchange_rate"', hidden_standard)
+		self.assertIn('("allocated_amount", "exchange_rate")', reference_fields)
+		self.assertIn('"in_list_view", "1"', reference_fields)
+		self.assertIn("_drop_payment_reference_setter", reference_fields)
 		self.assertIn("function convert_allocation", script)
 		self.assertIn("function write_allocation", script)
 		self.assertIn("_hero_ref_fill", script)

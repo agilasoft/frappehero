@@ -72,7 +72,12 @@ def ensure_custom_fields():
 
 
 def ensure_payment_reference_fields():
-	"""The user types the invoice-currency amount. The other amounts stay off the form."""
+	"""The user types the invoice-currency amount.
+
+	Grand Total and Outstanding stay off the transaction grid. Allocated
+	Amount and Exchange Rate stay on it, with the read-only flag ERPNext
+	gave them.
+	"""
 	if not frappe.db.exists("DocType", "Payment Entry Reference"):
 		return
 	from frappe.custom.doctype.property_setter.property_setter import make_property_setter
@@ -83,17 +88,21 @@ def ensure_payment_reference_fields():
 		"account",
 		"account_type",
 		"payment_type",
-		"exchange_rate",
 		"exchange_gain_loss",
 		"total_amount",
 		"outstanding_amount",
-		"allocated_amount",
 	):
 		if not meta.has_field(fieldname):
 			continue
 		setters.append((fieldname, "hidden", "1", "Check"))
 		setters.append((fieldname, "read_only", "1", "Check"))
 		setters.append((fieldname, "in_list_view", "0", "Check"))
+	for fieldname in ("allocated_amount", "exchange_rate"):
+		if not meta.has_field(fieldname):
+			continue
+		setters.append((fieldname, "hidden", "0", "Check"))
+		setters.append((fieldname, "in_list_view", "1", "Check"))
+		_drop_payment_reference_setter(fieldname, "read_only")
 	for fieldname, prop, value, property_type in setters:
 		make_property_setter(
 			"Payment Entry Reference",
@@ -113,6 +122,23 @@ def ensure_payment_reference_fields():
 		update_modified=False,
 	)
 	frappe.clear_cache(doctype="Payment Entry Reference")
+
+
+def _drop_payment_reference_setter(fieldname, prop):
+	"""Remove a setter this app stored, so the standard field property returns."""
+	if not frappe.db.exists("DocType", "Property Setter"):
+		return
+	rows = frappe.get_all(
+		"Property Setter",
+		filters={
+			"doc_type": "Payment Entry Reference",
+			"field_name": fieldname,
+			"property": prop,
+		},
+		fields=["name"],
+	)
+	for row in rows:
+		frappe.delete_doc("Property Setter", row.name, ignore_permissions=True, force=True)
 
 
 def ensure_opening_invoice_extension():
