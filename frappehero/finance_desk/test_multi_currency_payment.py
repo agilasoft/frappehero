@@ -527,6 +527,8 @@ class TestMultiCurrencyPayment(unittest.TestCase):
 		self.assertIn("function convert_allocation", script)
 		self.assertIn("function write_allocation", script)
 		self.assertIn("_hero_ref_fill", script)
+		self.assertIn("_hero_convert", script)
+		self.assertIn("function is_draft", script)
 		self.assertNotIn("update_docfield_property", script)
 		account_field = install.split('"hero_allocated_account_amount"', 1)[1].split('"hero_booked_rate"', 1)[
 			0

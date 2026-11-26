@@ -121,6 +121,8 @@ function apply_invoice_currency(frm, columns) {
 			changed = true;
 		}
 	});
+	// convert_open_rows only updates a row edited in this session. A saved
+	// allocation is left as it was stored.
 	if (typeof convert_open_rows === "function") {
 		convert_open_rows(frm);
 	}
