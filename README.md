@@ -119,7 +119,7 @@ On **Mode of Payment**, tick **Uses Cheque Leaf**, or name the mode cheque or ch
 
 System Manager and Accounts Manager.
 
-A dispute always points at one sales invoice. The document that raised it can be that invoice, or a record from logistics, ERPNext, or another app. **Dispute Desk** asks for the source DocType, the source document, and the invoice. Sales Invoice has **Raise Dispute** under the Dispute menu. Other modules call `frappehero.dispute_desk.api.raise_dispute`.
+A dispute always points at one sales invoice. The document that raised it can be that invoice, or a record from logistics, ERPNext, or another app. **Dispute Desk** asks for the source DocType, the source document, and the invoice. Sales Invoice has **Dispute** under the Create menu. An invoice that already has an open dispute has **Open Dispute** under the Dispute menu. Other modules call `frappehero.dispute_desk.api.raise_dispute`.
 
 On Sales Invoice, dispute, credit, and holds sit on their own **Dispute** tab, after the other tabs. The invoice header is three columns: the customer, the dates, and the credit-note checks. A Customize Form field order that still has the Dispute section in that header is rewritten on migrate, and the form script moves the section onto the tab when the saved order has not caught up. **Credit** shows the customer credit limit for the company, the outstanding balance, and credit notes raised against the invoice. A credit note invoice also shows the invoice it was raised against. **Holds** lists an invoice hold (`on_hold` or `is_on_hold`) and any Hold action, including a hold this dispute has already released. When nothing is on hold, the tab says so.
 
