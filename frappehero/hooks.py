@@ -63,6 +63,12 @@ doc_events = {
 	"Currency Exchange": {
 		"validate": "frappehero.finance_desk.sync.lock_bsp_rate",
 	},
+	"ToDo": {
+		"after_insert": "frappehero.access_desk.assign.share_assignment",
+	},
+	"DocShare": {
+		"before_save": "frappehero.access_desk.assign.keep_assignment_share",
+	},
 	"Payment Entry": {
 		"before_validate": [
 			"frappehero.finance_desk.payment_reference.set_invoice_currency",
@@ -106,6 +112,12 @@ scheduler_events = {
 # The page lists open assignments that still have no file.
 # Collection Call logs a call against a customer, emails the statement, and
 # can draft a receipt or raise a claim, an incident, or a dispute.
+# Assigning a user to any document shares it with that user: read, write, and
+# share, plus submit when the DocType can be submitted. Frappe may then save a
+# read-only share for someone who could not already open the document. The
+# DocShare hook puts the assignment rights back before that row is written.
+# Administrator and Guest are skipped. Document sharing turned off in System
+# Settings leaves assignment unchanged. Closing the assignment leaves the share.
 # Sales Invoice, Purchase Invoice, and Payment Entry show one status pill.
 # A draft shows its own workflow state, including when Status still says
 # Pending for Approval. A submitted invoice shows Paid, Partly

@@ -79,6 +79,8 @@ System Manager tools that sit next to Permission Studio. **Next Modules** opens 
 
 **Share Desk** picks one document and shows roles with read, User Permissions that name it, and DocShares. Share it with a permission group. An end date is stored on the share; the daily job deletes shares after that date.
 
+Assigning a user to a document, on any DocType, shares that document with them. The share grants read, write, and share. Submit is included when the DocType can be submitted. Administrator and Guest are skipped. A site that has turned document sharing off keeps Frappe's own assignment behavior. Removing the assignment leaves the share in place.
+
 **Notification Router** emails a permission group for unmapped accounts, users who are in no group, or open access reviews. The daily job and Send Now both skip a route that already went out today.
 
 ## Finance Desk

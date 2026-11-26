@@ -2,15 +2,18 @@
 # For license information, please see license.txt
 
 import unittest
+from pathlib import Path
 
 from frappehero.access_desk.logic import (
 	apply_rows,
+	assignment_share,
 	clone_permission_rows,
 	default_conflicts,
 	diff_roles,
 	expired_share_names,
 	line_state,
 	merge_permissions,
+	missing_share_rights,
 	render_notice,
 	review_snapshot,
 	role_matrix,
@@ -116,6 +119,58 @@ class TestReviewsDefaultsShares(unittest.TestCase):
 			"2026-10-05",
 		)
 		self.assertEqual(names, ["old"])
+
+	def test_assignment_shares_read_write_and_submit_when_the_doctype_can_submit(self):
+		invoice = assignment_share("  ada@example.com ", "Sales Invoice", " SINV-1 ", " Open ", 1)
+		self.assertEqual(
+			invoice,
+			{
+				"user": "ada@example.com",
+				"doctype": "Sales Invoice",
+				"docname": "SINV-1",
+				"read": 1,
+				"write": 1,
+				"share": 1,
+				"submit": 1,
+			},
+		)
+		note = assignment_share("ada@example.com", "Note", "NOTE-1", "Open", 0)
+		self.assertEqual(note["submit"], 0)
+		self.assertEqual(note["write"], 1)
+		self.assertEqual(note["share"], 1)
+		for user in ("Guest", "Administrator", "", " "):
+			self.assertIsNone(assignment_share(user, "Sales Invoice", "SINV-1", "Open", 1))
+		self.assertIsNone(assignment_share("ada@example.com", "Sales Invoice", "SINV-1", "Closed", 1))
+		self.assertIsNone(assignment_share("ada@example.com", "Sales Invoice", "SINV-1", "Cancelled", 1))
+		self.assertIsNone(assignment_share("ada@example.com", "", "SINV-1", "Open", 1))
+		self.assertIsNone(assignment_share("ada@example.com", "Sales Invoice", "", "Open", 1))
+		self.assertIsNone(assignment_share("ada@example.com", "Sales Invoice", "SINV-1", "Open", 1, sharing_enabled=0))
+
+	def test_assignment_share_only_turns_missing_bits_on(self):
+		wanted = assignment_share("ada@example.com", "Sales Invoice", "SINV-1", "Open", "1")
+		self.assertEqual(
+			missing_share_rights({"read": 1, "write": 0, "share": 0, "submit": 0}, wanted),
+			{"write": 1, "share": 1, "submit": 1},
+		)
+		self.assertEqual(
+			missing_share_rights({"read": 1, "write": 1, "share": 1, "submit": 1}, wanted),
+			{},
+		)
+		plain = assignment_share("ada@example.com", "Note", "N-1", "Open", 0)
+		self.assertEqual(missing_share_rights(None, plain), {"read": 1, "write": 1, "share": 1})
+		self.assertEqual(
+			missing_share_rights({"read": 1, "write": 1, "share": 1, "submit": 1}, plain),
+			{},
+		)
+
+	def test_assignment_hooks_cover_every_doctype(self):
+		root = Path(__file__).resolve().parents[1]
+		hooks = (root / "hooks.py").read_text()
+		source = (root / "access_desk" / "assign.py").read_text()
+		self.assertIn('"after_insert": "frappehero.access_desk.assign.share_assignment"', hooks)
+		self.assertIn('"before_save": "frappehero.access_desk.assign.keep_assignment_share"', hooks)
+		self.assertIn("ignore_share_permission", source)
+		self.assertIn("add_docshare", source)
 
 	def test_notifications_send_once_a_day(self):
 		self.assertFalse(should_send(0, None, "2026-10-05"))
