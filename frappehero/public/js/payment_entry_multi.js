@@ -6,8 +6,7 @@ frappe.ui.form.on("Payment Entry", {
 		set_queries(frm);
 		hide_calculated_amounts(frm);
 		ensure_company_currency(frm);
-		stamp_payment_currency(frm);
-		if (frm.doc.docstatus === 0 && frm.doc.payment_type !== "Internal Transfer") {
+		if (is_draft(frm) && frm.doc.payment_type !== "Internal Transfer") {
 			frm.add_custom_button(__("Get Outstanding Invoices"), () => get_outstanding(frm));
 		}
 	},
@@ -111,13 +110,14 @@ frappe.ui.form.on("Payment Entry Reference", {
 	},
 
 	hero_allocated_invoice_amount(frm, cdt, cdn) {
-		if (frm._hero_multi_lock) {
+		if (frm._hero_multi_lock || !is_draft(frm)) {
 			return;
 		}
 		ensure_company_currency(frm);
 		const row = locals[cdt][cdn];
 		if (row) {
 			row.hero_allocation_basis = "Invoice";
+			row._hero_convert = true;
 			delete row._hero_ref_fill;
 		}
 		convert_allocation(frm, cdt, cdn);
@@ -418,9 +418,14 @@ function paying_rate(frm) {
 	return rate > 0 ? rate : 0;
 }
 
+function is_draft(frm) {
+	const status = frm.doc && frm.doc.docstatus;
+	return status == null || status === "" || Number(status) === 0;
+}
+
 function convert_allocation(frm, cdt, cdn) {
 	const row = locals[cdt] && locals[cdt][cdn];
-	if (!row || frm._hero_multi_lock) {
+	if (!row || frm._hero_multi_lock || !row._hero_convert || !is_draft(frm)) {
 		return;
 	}
 	stamp_payment_currency(frm);
@@ -452,6 +457,9 @@ function convert_allocation(frm, cdt, cdn) {
 		party_amount(frm, row, invoiceAmount, payingAmount),
 		account_amount(frm, row, invoiceAmount, payingAmount)
 	);
+	if (!frm.doc.company || frm._hero_company_currency) {
+		delete row._hero_convert;
+	}
 }
 
 function party_amount(frm, row, invoiceAmount, payingAmount) {
@@ -522,13 +530,17 @@ function write_allocation(frm, cdt, cdn, invoiceAmount, payingAmount, partyAmoun
 	});
 }
 
+// Invoice currency is loaded for display when a payment opens. Only a row whose
+// allocated invoice amount was edited in this session is converted. Rewriting
+// every saved row marks the voucher Not Saved and replaces the allocation that
+// print and the next save would keep.
 function convert_open_rows(frm) {
+	if (!is_draft(frm)) {
+		return;
+	}
 	(frm.doc.references || []).forEach((row) => {
-		if (!row.doctype || !row.name) {
+		if (!row || !row._hero_convert || !row.doctype || !row.name) {
 			return;
-		}
-		if (!row.hero_allocation_basis) {
-			row.hero_allocation_basis = Number(row.hero_allocated_invoice_amount) ? "Invoice" : "Account";
 		}
 		convert_allocation(frm, row.doctype, row.name);
 	});
