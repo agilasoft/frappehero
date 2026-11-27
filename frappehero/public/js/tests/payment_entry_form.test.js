@@ -28,6 +28,7 @@ function load(options = {}) {
 		locals: {},
 		docfields: {},
 		dirtied: false,
+		queries: {},
 	};
 	const invoices =
 		options.invoices ||
@@ -174,7 +175,10 @@ function load(options = {}) {
 					},
 				},
 			},
-			set_query() {},
+			set_query(field, child, callback) {
+				const key = child ? child + "." + field : field;
+				shared.queries[key] = callback;
+			},
 			add_custom_button() {},
 			refresh_field() {},
 			refresh_fields() {},
@@ -363,6 +367,83 @@ test("a submitted payment is not rewritten on open or by the invoice amount hand
 	assert.equal(shared.writes.length, 0);
 	assert.equal(frm.doc.__unsaved || 0, 0);
 });
+
+test("a journal entry reference search does not filter fields the voucher lacks", async () => {
+	const { shared, fire, flush, payment } = load({});
+	const row = savedRow({
+		reference_doctype: "Journal Entry",
+		reference_name: "",
+	});
+	const frm = payment([row], {
+		company: "ALL TRANSPORT NETWORK, INC.",
+		party_type: "Supplier",
+		party: "ALLTRAMNL",
+	});
+	fire("Payment Entry", "refresh", frm);
+	await flush();
+
+	const query = shared.queries["references.reference_name"];
+	const result = query(frm.doc, row.doctype, row.name);
+	assert.deepEqual(hostValue(result.filters), {
+		company: "ALL TRANSPORT NETWORK, INC.",
+		docstatus: 1,
+	});
+});
+
+test("an invoice reference search still limits the party and the open balance", async () => {
+	const { shared, fire, flush, payment } = load({});
+	const purchase = savedRow({ name: "row-pi", reference_doctype: "Purchase Invoice" });
+	const sales = savedRow({
+		name: "row-si",
+		reference_doctype: "Sales Invoice",
+		reference_name: "SINV-1",
+	});
+	const order = savedRow({
+		name: "row-po",
+		reference_doctype: "Purchase Order",
+		reference_name: "",
+	});
+	const supplier = payment([purchase, order], {
+		company: "ALL TRANSPORT NETWORK, INC.",
+		party_type: "Supplier",
+		party: "ALLTRAMNL",
+	});
+	fire("Payment Entry", "refresh", supplier);
+	await flush();
+	const supplierQuery = shared.queries["references.reference_name"];
+	assert.deepEqual(hostValue(supplierQuery(supplier.doc, purchase.doctype, purchase.name).filters), {
+		company: "ALL TRANSPORT NETWORK, INC.",
+		docstatus: 1,
+		outstanding_amount: [">", 0],
+		supplier: "ALLTRAMNL",
+	});
+	assert.deepEqual(hostValue(supplierQuery(supplier.doc, order.doctype, order.name).filters), {
+		company: "ALL TRANSPORT NETWORK, INC.",
+		docstatus: 1,
+		supplier: "ALLTRAMNL",
+	});
+
+	const customer = payment([sales], {
+		name: "ATN-MNL-OR-1",
+		company: "ALL TRANSPORT NETWORK, INC.",
+		payment_type: "Receive",
+		party_type: "Customer",
+		party: "ACME",
+	});
+	fire("Payment Entry", "refresh", customer);
+	await flush();
+	const customerQuery = shared.queries["references.reference_name"];
+	assert.deepEqual(hostValue(customerQuery(customer.doc, sales.doctype, sales.name).filters), {
+		company: "ALL TRANSPORT NETWORK, INC.",
+		docstatus: 1,
+		outstanding_amount: [">", 0],
+		customer: "ACME",
+	});
+});
+
+function hostValue(value) {
+	return JSON.parse(JSON.stringify(value));
+}
 
 test("the transaction grid shows allocated amount and exchange rate", async () => {
 	const { shared, fire, flush, payment } = load({});
