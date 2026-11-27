@@ -180,6 +180,20 @@ function hide_calculated_amounts(frm) {
 	}
 }
 
+// These documents store the party on the parent. Journal Entry stores it on
+// Journal Entry Account, so a parent supplier or customer filter is rejected.
+const PARTY_REFERENCE_DOCTYPES = [
+	"Sales Invoice",
+	"Sales Order",
+	"Purchase Invoice",
+	"Purchase Order",
+	"Dunning",
+];
+
+// Only invoices have outstanding_amount. Journal Entry, orders, and Dunning do
+// not, and Frappe reports a filter on a missing field as a permission error.
+const OUTSTANDING_REFERENCE_DOCTYPES = ["Sales Invoice", "Purchase Invoice"];
+
 function set_queries(frm) {
 	const account_type = frm.doc.party_type === "Customer" ? "Receivable" : "Payable";
 	frm.set_query("hero_account", "references", () => ({
@@ -189,19 +203,31 @@ function set_queries(frm) {
 			account_type,
 		},
 	}));
-	frm.set_query("reference_name", "references", (doc) => {
-		const filters = {
-			company: doc.company,
-			docstatus: 1,
-			outstanding_amount: [">", 0],
+	frm.set_query("reference_name", "references", (doc, cdt, cdn) => {
+		const child = cdt && locals[cdt] ? locals[cdt][cdn] : null;
+		return {
+			filters: reference_name_filters(doc, child && child.reference_doctype),
 		};
-		if (doc.party_type === "Customer") {
-			filters.customer = doc.party;
-		} else if (doc.party_type === "Supplier") {
-			filters.supplier = doc.party;
-		}
-		return { filters };
 	});
+}
+
+function reference_name_filters(doc, reference_doctype) {
+	const filters = {
+		company: doc.company,
+		docstatus: 1,
+	};
+	if (OUTSTANDING_REFERENCE_DOCTYPES.includes(reference_doctype)) {
+		filters.outstanding_amount = [">", 0];
+	}
+	if (!PARTY_REFERENCE_DOCTYPES.includes(reference_doctype)) {
+		return filters;
+	}
+	if (doc.party_type === "Customer") {
+		filters.customer = doc.party;
+	} else if (doc.party_type === "Supplier") {
+		filters.supplier = doc.party;
+	}
+	return filters;
 }
 
 function get_outstanding(frm) {
